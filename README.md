@@ -1,15 +1,15 @@
 # Reinforce-Learning-Trajectory-Planning
 通过强化学习对6轴机器人进行轨迹规划，包含以下文件
 # ------------------------------------------------------
-robot                     机器人，包含DHRobot和CollisionRobot，前者用于计算DH模型，解算最终位姿误差；后者用于碰撞建模，后续用作碰撞检测
-environment               环境，包含Robot建模，用于模拟环境中机器人行动并将数据输出用于训练，后续会生成行动轨迹
-agent                     智能体，包含PPOAgent和SACAgent，其中SACAgent尚未完成
-train                     训练智能体，用于调用Agent中的智能体进行训练
-read_and_write_file       文件读写，包含轨迹文件读写和智能体数据文件读写
-visiualization            可视化，用于将生成的轨迹和姿态进行可视化，后续还要添加，尚未完成
-main                      主函数，训练时跑这个函数
-test                      写代码过程中写的一些测试代码，没什么用
-subject                   一些独立的小代码，用于实现某些功能
+robot                   机器人，包含DHRobot和CollisionRobot，前者用于计算DH模型，解算最终位姿误差；后者用于碰撞建模，后续用作碰撞检测
+environment             环境，包含Robot建模，用于模拟环境中机器人行动并将数据输出用于训练，后续会生成行动轨迹
+agent                   智能体，包含PPOAgent和SACAgent，其中SACAgent尚未完成
+train                   训练智能体，用于调用Agent中的智能体进行训练
+read_and_write_file     文件读写，包含轨迹文件读写和智能体数据文件读写
+visiualization          可视化，用于将生成的轨迹和姿态进行可视化，后续还要添加，尚未完成
+main                    主函数，训练时跑这个函数
+test                    写代码过程中写的一些测试代码，没什么用
+subject                 一些独立的小代码，用于实现某些功能
 # ------------------------------------------------------
 
 # 版本迭代=====================================
