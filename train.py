@@ -84,6 +84,7 @@ class Train:
                 self.agent.memory.clear()
             
             angles_error = self.environment.target - self.environment.theta
+            angles_error_l2 = np.linalg.norm(angles_error)
             success = bool(done_or_not and self.environment.arrive_detect(self.environment.theta, self.environment.target))
             rewards_history.append(episode_reward)
             steps_history.append(episode_steps)
@@ -93,8 +94,8 @@ class Train:
                 recent_success = np.mean(success_history[-100:]) * 100
                 recent_reward = np.mean(rewards_history[-100:])
                 recent_steps = np.mean(steps_history[-100:])
-                print(f"[Ep {episode + 1}] SuccessRate(100ep): {recent_success:.1f}%  AvgReward: {recent_reward:.2f}  AvgSteps: {recent_steps:.1f}  角度误差: {np.round(angles_error, 3)}")
+                print(f"[Ep {episode + 1}] SuccessRate(100ep): {recent_success:.1f}%  AvgReward: {recent_reward:.2f}  AvgSteps: {recent_steps:.1f}  angles_error: {np.round(angles_error, 3)}  angles_error_l2: {angles_error_l2:.3f}")
             else:
-                print(f"Episode {episode + 1} 角度误差: {np.round(angles_error, 3)}")
+                print(f"Episode {episode + 1} angles_error: {np.round(angles_error, 3)}  angles_error_l2: {angles_error_l2:.3f}")
 
     
