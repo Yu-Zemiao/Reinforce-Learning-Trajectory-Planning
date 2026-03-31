@@ -15,8 +15,9 @@ import numpy as np
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class ActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim):
+    def __init__(self, state_dim, action_dim, action_bound=5.0):
         super().__init__()
+        self.action_bound = float(action_bound)
 
         self.actor = nn.Sequential(
             nn.Linear(state_dim, 256),
@@ -29,7 +30,7 @@ class ActorCritic(nn.Module):
         )
 
         # log_std是可学习参数（关键）
-        self.log_std = nn.Parameter(torch.zeros(action_dim))
+        self.log_std = nn.Parameter(torch.ones(action_dim) * -0.5)
 
         self.critic = nn.Sequential(
             nn.Linear(state_dim, 256),
@@ -43,22 +44,21 @@ class ActorCritic(nn.Module):
 
     def act(self, state):
         state = state.to(device)
-        mean = self.actor(state)
-        std = torch.exp(self.log_std)
+        mean = torch.tanh(self.actor(state)) * self.action_bound
+        log_std = torch.clamp(self.log_std, -2.0, 1.0)
+        std = torch.exp(log_std)
 
-        dist = Normal(mean, std) # 创建一个分布库，用于构建一个正态分布对象，均值和标准差由上一步计算出
+        dist = Normal(mean, std)
         action = dist.sample()
-
-        # action = 0.2 * torch.tanh(action)
-        # action = torch.clamp(action, -0.02, 0.02)
-
+        action = torch.clamp(action, -self.action_bound, self.action_bound)
         log_prob = dist.log_prob(action).sum(dim=-1)
 
         return action, log_prob
 
     def evaluate(self, state, action):
-        mean = self.actor(state)
-        std = torch.exp(self.log_std)
+        mean = torch.tanh(self.actor(state)) * self.action_bound
+        log_std = torch.clamp(self.log_std, -2.0, 1.0)
+        std = torch.exp(log_std)
 
         dist = Normal(mean, std)
 
@@ -80,20 +80,22 @@ class Memory:
         self.__init__()  
 
 class PPOAgent:
-    def __init__(self, state_dim, action_dim):
-        self.policy = ActorCritic(state_dim, action_dim).to(device)
-        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-5)
+    def __init__(self, state_dim, action_dim, action_bound=5.0):
+        self.policy = ActorCritic(state_dim, action_dim, action_bound=action_bound).to(device)
+        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
         self.memory = Memory()
 
         self.gamma = 0.99
-        self.eps_clip = 0.2 # 截断参数
-        self.K_epochs = 10
+        self.eps_clip = 0.2
+        self.K_epochs = 4
+        self.value_coef = 0.5
+        self.entropy_coef = 0.01
         self.loss = 0
 
     def update(self):
         states = torch.stack(self.memory.states).to(device)
         actions = torch.stack(self.memory.actions).to(device)
-        old_logprobs = torch.stack(self.memory.logprobs).to(device)
+        old_logprobs = torch.stack(self.memory.logprobs).to(device).detach()
         rewards = self.memory.rewards
         dones = self.memory.dones
 
@@ -107,31 +109,28 @@ class PPOAgent:
             returns.insert(0, discounted) # 将每次新的值插到列表最前面，即倒序排序
 
         returns = torch.tensor(returns, dtype=torch.float32).to(device)
-        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
 
         for _ in range(self.K_epochs):
             logprobs, state_values, entropy = self.policy.evaluate(states, actions)
 
-            ratios = torch.exp(logprobs - old_logprobs.detach())
+            ratios = torch.exp(logprobs - old_logprobs)
             advantages = returns - state_values.detach()
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
             surr1 = ratios * advantages
             surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
 
-            loss = (
-                -torch.min(surr1, surr2)
-                + 0.5 * (returns - state_values).pow(2)
-                # - 0.01 * entropy
-            )
-            
-            # loss = -torch.min(surr1, surr2)
+            policy_loss = -torch.min(surr1, surr2).mean()
+            value_loss = nn.MSELoss()(state_values, returns)
+            entropy_loss = entropy.mean()
+            loss = policy_loss + self.value_coef * value_loss - self.entropy_coef * entropy_loss
 
             self.optimizer.zero_grad()
-            loss.mean().backward()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
             self.optimizer.step()
 
-            self.loss = np.array(loss.mean().item())
+            self.loss = np.array(loss.item())
 
 
     
