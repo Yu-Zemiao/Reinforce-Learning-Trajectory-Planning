@@ -26,31 +26,39 @@ class Environment:
 
         self.state_dim = 18
         self.action_dim = 6
+        self.action_bound = 5.0
 
         self.distance_error_threshold = 0.010 # 距离误差阈值
-        self.angles_error_threshold = 0.10 # 各关节角度误差阈值
+        self.angles_error_threshold = 1.0
+        self._lo = self.robot.theta_limits[:, 0].astype(float)
+        self._hi = self.robot.theta_limits[:, 1].astype(float)
+        self._range = self._hi - self._lo
+        self._prev_dist_norm = 0.0
+        self.use_random_reset = False
         
     def initial_set(self, initial_angles, target_angles):
         
-        self.initial_angles = initial_angles
-        self.target_angles = target_angles
+        self.initial_angles = initial_angles.astype(float)
+        self.target_angles = target_angles.astype(float)
         self.angles = self.initial_angles.copy()
 
         return 0
 
     def train_reset(self):
-
-        self.theta = np.zeros(6)
-        self.target = np.zeros(6)
-
-        for i in range(6):
-            theta_limit = self.robot.theta_limits[i]
-            self.theta[i] = np.random.uniform(theta_limit[0], theta_limit[1])
-            self.target[i] = np.random.uniform(theta_limit[0], theta_limit[1])
-
+        if self.use_random_reset:
+            self.theta = np.zeros(6, dtype=float)
+            self.target = np.zeros(6, dtype=float)
+            for i in range(6):
+                theta_limit = self.robot.theta_limits[i]
+                self.theta[i] = np.random.uniform(theta_limit[0], theta_limit[1])
+                self.target[i] = np.random.uniform(theta_limit[0], theta_limit[1])
+        else:
+            self.theta = self.initial_angles.copy().astype(float)
+            self.target = self.target_angles.copy().astype(float)
         theta_error = self.target - self.theta
 
         self.step_count = 0
+        self._prev_dist_norm = np.linalg.norm(theta_error / self._range)
 
         return self._get_state(theta_error)
         
@@ -58,67 +66,38 @@ class Environment:
     # def _get_state(self, theta_error):
     #     return np.concatenate([self.theta, self.target, theta_error])
 
-    # 新一版的_get_state，添加了归一化
     def _get_state(self, angles_error):
-        # 假设 self.theta, self.target 等数组已经存在
-        # 提取所有关节的上下限
-        lower_bounds = np.array([limit[0] for limit in self.robot.theta_limits])
-        upper_bounds = np.array([limit[1] for limit in self.robot.theta_limits])
-        ranges = upper_bounds - lower_bounds
-        
-        # 1. 对 theta 进行归一化到 [-1, 1]
-        norm_theta = 2.0 * (self.theta - lower_bounds) / ranges - 1.0
-        
-        # 2. 对 target 进行归一化到 [-1, 1]
-        norm_target = 2.0 * (self.target - lower_bounds) / ranges - 1.0
-        
-        # 3. 对 angles_error 进行归一化
-        # 误差的最大范围是 [-ranges, ranges]，可以除以 ranges 映射到 [-1, 1]
-        norm_angles_error = angles_error / ranges
-        
-        # 最后拼接作为网络的绝对纯净、归一化后的状态输入
-        return np.concatenate([norm_theta, norm_target, norm_angles_error])
+        norm_theta = 2.0 * (self.theta - self._lo) / self._range - 1.0
+        norm_target = 2.0 * (self.target - self._lo) / self._range - 1.0
+        norm_angles_error = angles_error / self._range
+        return np.concatenate([norm_theta, norm_target, norm_angles_error]).astype(np.float32)
 
 
     def step(self, action):
-        last_theta = self.theta.copy()
-        last_posture_error, _ = self.error_calculate(last_theta, self.target)
-        last_posture_error = np.linalg.norm(last_posture_error)
-        self.theta += action
-        now_posture_error, _ = self.error_calculate(self.theta, self.target)
-
-        # 这里后续要添加一个关节角度范围是否超出的检测
+        action = np.asarray(action, dtype=float)
+        action = np.clip(action, -self.action_bound, self.action_bound)
+        self.theta = self.theta + action
+        self.theta = np.clip(self.theta, self._lo, self._hi)
 
         self.step_count += 1
 
-        # 这里可能需要添加一个归一化
-        angles_error, posture_error = self.error_calculate(self.theta, self.target)
-        norm_angles_error = np.linalg.norm(angles_error)
-        norm_posture_error = np.linalg.norm(posture_error)
-
-        # reward = -norm_angles_error**2 - norm_posture_error**2
-
-        # reward = -(0.1 * norm_angles_error + 0.5 * norm_posture_error)
-
-        reward = - norm_angles_error
-
-        # 添加一个新的reward计算方式，提高每一步中靠近最终结果时的奖励
-        # 采用一种强激励，为每一次动作都加入奖励
-        # 当姿态误差减少时，奖励增加；当姿态误差增加时，奖励减少
-        # if norm_posture_error < last_posture_error:
-        #     reward += 5
-        # elif norm_posture_error > last_posture_error:
-        #     reward -= 5
+        angles_error = self.target - self.theta
+        norm_angles_error = np.linalg.norm(angles_error / self._range)
+        shaping = 20.0 * (self._prev_dist_norm - norm_angles_error)
+        self._prev_dist_norm = norm_angles_error
+        action_penalty = 0.01 * np.linalg.norm(action)
+        reward = shaping - action_penalty
 
         done = False
         if self.arrive_detect(self.theta, self.target): # 到达目标位姿
-            reward += 100
+            reward += 200.0
             done = True
 
-        if self.step_count > self.max_steps: # 移动次数超出要求
+        if self.step_count >= self.max_steps: # 移动次数超出要求
+            reward -= 5.0
             done = True
 
-        return self._get_state(angles_error), reward, done
+        return self._get_state(angles_error), float(reward), done
 
     # 计算姿态误差，分别输出为各关节角度误差，姿态误差
     def error_calculate(self, angles, target_angles):
@@ -137,7 +116,7 @@ class Environment:
     
     def arrive_detect(self, angles, target_angles):
 
-        angles_error, _ = self.error_calculate(angles, target_angles)
+        angles_error = target_angles - angles
 
         if np.any(np.abs(angles_error) > self.angles_error_threshold):
             return 0
