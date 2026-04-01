@@ -27,26 +27,30 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class Train:
     
     def __init__(self, environment:Environment):
-        self.agent = PPOAgent(state_dim = environment.state_dim, action_dim = environment.action_dim)
+        self.agent = PPOAgent(
+            state_dim=environment.state_dim,
+            action_dim=environment.action_dim,
+            action_bound=environment.action_bound
+        )
         # self.agent = SACAgent(state_dim = 12, action_dim = 6)
         self.robot = Robot()
         self.max_episodes = 1000
+        self.batch_size = 512
         self.environment = environment
 
         self.training_parameter_saving_path = None
         
 
     def train(self):
-
-        update_count = 0
-        reward_count = 0
-        average_reward = 0
+        rewards_history = []
+        steps_history = []
+        success_history = []
 
         for episode in range(self.max_episodes):
             state = torch.FloatTensor(self.environment.train_reset()).to(device)
 
-            theta0 = self.environment.theta.copy()
-
+            episode_reward = 0.0
+            episode_steps = 0
             done_or_not = 0
             
             for step in range(self.environment.max_steps):
@@ -64,42 +68,34 @@ class Train:
                 self.agent.memory.dones.append(done)
 
                 state = torch.FloatTensor(next_state).to(device)
+                episode_reward += reward
+                episode_steps += 1
 
                 if done:
                     done_or_not = done
                     break
 
+                if len(self.agent.memory.states) >= self.batch_size:
+                    self.agent.update()
+                    self.agent.memory.clear()
             
-            # 输出最终误差
-            angles_error, posture_error = self.environment.error_calculate(angles = self.environment.theta, target_angles = self.environment.target)
-            print(f"初始角度为：{np.round(theta0, 3)}")
-            print(f"最终角度为：{np.round(self.environment.theta, 3)}")
-            print(f"目标角度为：{np.round(self.environment.target, 3)}")
-            print(f"角度误差为：{np.round(angles_error, 3)}")
-            # print(f"位置误差为：{np.round(posture_error[:3], 3)}")
-            print(f"当前奖励为：{np.round(self.agent.memory.rewards[-1], 3)}")
-            average_reward += self.agent.memory.rewards[-1]
-            reward_count += 1
-            
-            # 检测抵达
-            if done_or_not:
-                print(f"{GREEN}第{episode + 1}次成功抵达！{RESET}")
-                done_or_not = 0
-
-            if len(self.agent.memory.states) >= 1900: # 更新参数
+            if len(self.agent.memory.states) > 0:
                 self.agent.update()
                 self.agent.memory.clear()
-                update_count += 1
-                print(f"-------------------------------------------")
-                print(f"第{update_count}次更新")
-                print(f"当前损失为：{np.round(self.agent.loss, 3)}")
-                print(f"平均奖励为：{np.round(average_reward / reward_count, 3)}")
-                print(f"-------------------------------------------")
-                reward_count = 0
-                average_reward = 0
+            
+            angles_error = self.environment.target - self.environment.theta
+            angles_error_l2 = np.linalg.norm(angles_error)
+            success = bool(done_or_not and self.environment.arrive_detect(self.environment.theta, self.environment.target))
+            rewards_history.append(episode_reward)
+            steps_history.append(episode_steps)
+            success_history.append(float(success))
 
-            print(f"Episode {episode + 1} finished")
-
-
+            if (episode + 1) % 100 == 0:
+                recent_success = np.mean(success_history[-100:]) * 100
+                recent_reward = np.mean(rewards_history[-100:])
+                recent_steps = np.mean(steps_history[-100:])
+                print(f"[Ep {episode + 1}] SuccessRate(100ep): {recent_success:.1f}%  AvgReward: {recent_reward:.2f}  AvgSteps: {recent_steps:.1f}  angles_error: {np.round(angles_error, 3)}  angles_error_l2: {angles_error_l2:.3f}")
+            else:
+                print(f"Episode {episode + 1} angles_error: {np.round(angles_error, 3)}  angles_error_l2: {angles_error_l2:.3f}")
 
     
