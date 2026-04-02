@@ -120,7 +120,7 @@ def trace_trajectory_to_gif(trajectory, step, save_path):
     def update(frame_id):
         points = sampled_points[frame_id]
         line_robot.set_data(points[:, 0], points[:, 1])
-        line_robot.set_3d_properties(points[:, 2])
+        line_robot.set_3d_properties(points[:, 2]) # type: ignore
         _set_scatter_points(joints, points)
         _set_scatter_points(tcp, points[-1:])
         title.set_text(f"Frame {frame_id + 1}/{len(sampled_points)}  StepIndex={sampled_index[frame_id]}")

@@ -22,7 +22,7 @@ class Environment:
 
         self.angles = self.initial_angles.copy()
 
-        self.max_steps = 1000
+        self.max_steps = 4000
 
         self.state_dim = 18
         self.action_dim = 6
