@@ -70,7 +70,11 @@ def _draw_cylinder(ax, p1, p2, radius):
 def _set_scatter_points(scatter, points):
     scatter._offsets3d = (points[:, 0], points[:, 1], points[:, 2])
 
-
+# // 可视化轨迹
+# // 输入：// trajectory: 轨迹矩阵，n*6
+# // step: 可视化步长
+# // save_path: 保存路径
+# 注意，每个关节的角度单位是弧度！！！
 def trace_trajectory_to_gif(trajectory, step, save_path):
     trajectory = np.asarray(trajectory, dtype=float)
     if trajectory.ndim != 2 or trajectory.shape[1] != 6:
