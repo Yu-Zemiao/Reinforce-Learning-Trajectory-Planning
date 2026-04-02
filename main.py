@@ -1,5 +1,6 @@
 #引入模块----------------------------------
 import numpy as np
+import os
 #------------------------------------------
 
 #自定义模块--------------------------------
@@ -51,6 +52,17 @@ if __name__ == "__main__":
 
     train = Train(env)
     fileio = ReadAndWritefile()
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    training_path = os.path.join(current_dir, "log", "train")
+    best_training_parameters_path = os.path.join(training_path, "best_training_parameters.pt")
+    os.makedirs(os.path.dirname(best_training_parameters_path), exist_ok=True)
+    last_training_parameters_path = os.path.join(training_path, "last_training_parameters.pt")
+    os.makedirs(os.path.dirname(last_training_parameters_path), exist_ok=True)
+
+    read_training_parameters_file_path = best_training_parameters_path
+
+    # fileio.read_training_parameters_file(train.agent, read_training_parameters_file_path)
 
     train.train()
 

@@ -4,6 +4,7 @@ import torch
 #------------------------------------------
 
 #自定义模块--------------------------------
+from agent.PPO_agent import PPOAgent
 #------------------------------------------
 
 #注意事项----------------------------------
@@ -70,32 +71,35 @@ class ReadAndWritefile:
         print(f"输出轨迹成功！共输出{container.shape[0] if container is not None else 0}个数据，训练数据保存至{path}")
 
     # 读取训练数据
-    def read_training_parameters_file(self, train, read_training_parameters_file_path = None, inference = False):
+    def read_training_parameters_file(self, agent:PPOAgent, read_training_parameters_file_path = None, inference = False):
         
         path = read_training_parameters_file_path if read_training_parameters_file_path is not None else self.read_training_parameters_file_path
         self.file_path_exist_detect(path) # 检查路径是否存在
         
-        train_agent = train
-
         state_dict = torch.load(path, map_location = device) # type: ignore
 
         # 加载模型参数
-        train_agent.agent.policy.load_state_dict(state_dict)
+        agent.policy.load_state_dict(state_dict)
 
+        # 推理模式暂时用不了
         if inference:
-            train_agent.agent.policy.eval() # 推理模式
+            agent.policy.eval() # 推理模式
         else:
-            train_agent.agent.policy.train() # 训练模式
+            agent.policy.train() # 训练模式
 
         print(f"读取训练数据成功！")
 
     # 输出训练数据
-    def write_tarining_parameters_file(self, agent, write_training_parameters_file_path = None):
+    def write_training_parameters_file(self, agent, write_training_parameters_file_path = None):
 
         path = write_training_parameters_file_path if write_training_parameters_file_path is not None else self.write_training_parameters_file_path
         self.file_path_exist_detect(path) # 检查路径是否存在
 
-        torch.save(agent.policy.state_dict(), path) # type: ignore
+        try:
+            torch.save(agent.policy.state_dict(), path) # type: ignore
+        except RuntimeError as e:
+            # 如果文件被占用或无权限，这里会给出明确的中文提示，而不是抛出一长串底层的 Traceback
+            raise RuntimeError(f"保存失败！请检查文件是否被占用或是否有写入权限。\n目标路径: {path}\n底层报错: {e}")
 
     def write_reward_file(self, reward_container = None, write_reward_file_path = None):
         
