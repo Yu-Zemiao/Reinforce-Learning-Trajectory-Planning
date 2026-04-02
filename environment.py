@@ -81,6 +81,10 @@ class Environment:
 
         self.step_count += 1
 
+
+        # ====================================================
+        # 重中之重，最需要调整的地方
+        # ====================================================
         angles_error = self.target - self.theta
         norm_angles_error = np.linalg.norm(angles_error / self._range)
         shaping = 20.0 * (self._prev_dist_norm - norm_angles_error)
@@ -89,15 +93,18 @@ class Environment:
         reward = shaping - action_penalty
 
         done = False
+        success = False
         if self.arrive_detect(self.theta, self.target): # 到达目标位姿
             reward += 200.0
             done = True
+            success = True
 
         if self.step_count >= self.max_steps: # 移动次数超出要求
             reward -= 5.0
             done = True
+            success = False
 
-        return self._get_state(angles_error), float(reward), done
+        return self._get_state(angles_error), float(reward), done, success
 
     # 计算姿态误差，分别输出为各关节角度误差，姿态误差
     def error_calculate(self, angles, target_angles):

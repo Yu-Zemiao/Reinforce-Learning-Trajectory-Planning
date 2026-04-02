@@ -50,7 +50,7 @@ if __name__ == "__main__":
     env.initial_angles = initial_angles
 
     train = Train(env)
-    fileio = ReadAndWritefile(train)
+    fileio = ReadAndWritefile()
 
     train.train()
 

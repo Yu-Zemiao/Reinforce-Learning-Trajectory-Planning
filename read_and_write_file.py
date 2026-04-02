@@ -4,7 +4,6 @@ import torch
 #------------------------------------------
 
 #自定义模块--------------------------------
-from train import Train
 #------------------------------------------
 
 #注意事项----------------------------------
@@ -16,7 +15,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class ReadAndWritefile:
 
-    def __init__(self, train:Train):
+    def __init__(self):
 
         # 轨迹文件
         self.read_trajectory_file_path = None
@@ -25,7 +24,8 @@ class ReadAndWritefile:
         self.read_training_parameters_file_path = None
         self.write_training_parameters_file_path = None
 
-        self.train = train
+        self.write_reward_file_path = None
+
 
 
     # 检查路径是否存在
@@ -38,9 +38,8 @@ class ReadAndWritefile:
     
     # 检查容器数据是否存在
     def container_exist_detect(self, container):
-        
-        if container.shape[0] == 0:
-            raise ValueError("数据为空！")
+        if container is None:
+            raise ValueError("容器为空！")
         
         return 1
     
@@ -76,7 +75,7 @@ class ReadAndWritefile:
         path = read_training_parameters_file_path if read_training_parameters_file_path is not None else self.read_training_parameters_file_path
         self.file_path_exist_detect(path) # 检查路径是否存在
         
-        train_agent = train if train is not None else self.train
+        train_agent = train
 
         state_dict = torch.load(path, map_location = device) # type: ignore
 
@@ -91,16 +90,19 @@ class ReadAndWritefile:
         print(f"读取训练数据成功！")
 
     # 输出训练数据
-    def write_tarining_parameters_file(self, train = None, write_training_parameters_file_path = None):
+    def write_tarining_parameters_file(self, agent, write_training_parameters_file_path = None):
 
         path = write_training_parameters_file_path if write_training_parameters_file_path is not None else self.write_training_parameters_file_path
         self.file_path_exist_detect(path) # 检查路径是否存在
 
-        train_agent = train if train is not None else self.train
+        torch.save(agent.policy.state_dict(), path) # type: ignore
 
-        torch.save(train_agent.agent.policy.state_dict(), path) # type: ignore
+    def write_reward_file(self, reward_container = None, write_reward_file_path = None):
+        
+        path = write_reward_file_path if write_reward_file_path is not None else self.write_reward_file_path
+        self.file_path_exist_detect(path) # 检查路径是否存在
+        self.container_exist_detect(reward_container)
+        np.savetxt(path, reward_container, fmt='%.3f')  # type: ignore
 
-        print(f"保存成功！训练数据保存至{path}")
-
-
-    
+        print(f"输出奖励成功！共输出{len(reward_container)}个数据，奖励数据保存至{path}") # type: ignore
+              

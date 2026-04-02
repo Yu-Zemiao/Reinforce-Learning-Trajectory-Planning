@@ -1,4 +1,5 @@
 #引入模块----------------------------------
+from pickletools import optimize
 import torch
 import torch.nn as nn
 from torch.distributions import Normal
@@ -83,6 +84,14 @@ class PPOAgent:
     def __init__(self, state_dim, action_dim, action_bound=5.0):
         self.policy = ActorCritic(state_dim, action_dim, action_bound=action_bound).to(device)
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
+
+        # 最简单版本学习率衰减，有待优化
+        self.scheduler = torch.optim.lr_scheduler.StepLR(
+            self.optimizer,
+            step_size=100,   # 每100次episode降低一次学习率
+            gamma=0.8
+        )
+
         self.memory = Memory()
 
         self.gamma = 0.99
@@ -91,6 +100,7 @@ class PPOAgent:
         self.value_coef = 0.5
         self.entropy_coef = 0.01
         self.loss = 0
+        self.loss_history = []
 
     def update(self):
         states = torch.stack(self.memory.states).to(device)
@@ -123,14 +133,23 @@ class PPOAgent:
             policy_loss = -torch.min(surr1, surr2).mean()
             value_loss = nn.MSELoss()(state_values, returns)
             entropy_loss = entropy.mean()
-            loss = policy_loss + self.value_coef * value_loss - self.entropy_coef * entropy_loss
+            loss = (
+                policy_loss
+                + self.value_coef * value_loss
+                - self.entropy_coef * entropy_loss
+                )
 
             self.optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
             self.optimizer.step()
+            self.scheduler.step()
 
-            self.loss = np.array(loss.item())
+            self.loss_history.append(loss.item())
+
+        self.loss = np.mean(self.loss_history)
+
+        
 
 
     
