@@ -8,6 +8,7 @@ from read_and_write_file import ReadAndWritefile
 from train import Train
 
 from utils.TraceVisiualization import trace_trajectory_to_gif
+from utils.logger import logger
 
 
 def generate_trajectory_from_model(max_steps=4000):
@@ -61,6 +62,7 @@ def generate_trajectory_from_model(max_steps=4000):
 
 
 def test_batch(batch_size=100):
+    logger.info("training start")
     env = Environment()
     theta_limits = env.robot.theta_limits.astype(float)
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -100,17 +102,18 @@ def test_batch(batch_size=100):
 
         angle_error = np.round(trajectory[-1] - end_angle, 3)
         # trajectory_path = os.path.join(output_dir, f"trajectory_{i + 1:04d}.txt")
-        # np.savetxt(trajectory_path, trajectory, fmt")
-        print(f"[{i + 1}/{batch_size}]trajectory angle_error: {angle_error}, begin_angle: {np.round(begin_angle, 3)}, end_angle: {np.round(end_angle, 3)}")
+        # np.savetxt(trajectory_path, trajectory, fmt="%f\n")
+        logger.info(f"[{i + 1}/{batch_size}]trajectory angle_error: {angle_error}, begin_angle: {np.round(begin_angle, 3)}, end_angle: {np.round(end_angle, 3)}")
         
 
 def test_trajectory():
-    print("Begin test trace.")
+    logger.info("Begin test trace.")
+
     trajectory = generate_trajectory_from_model(max_steps=4000)
 
     GIF_path = "test_trajectory.gif"
     trace_trajectory_to_gif(trajectory, step=10, save_path=GIF_path)
-    print(f"GIF generated, {GIF_path}")
+    logger.info(f"GIF generated, {GIF_path}")
 
 
 if __name__ == "__main__":

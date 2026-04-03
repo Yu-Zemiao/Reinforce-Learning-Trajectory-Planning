@@ -14,6 +14,7 @@ from environment import Environment
 from agent.PPO_agent import PPOAgent
 from agent.SAC_agent import SACAgent
 from read_and_write_file import ReadAndWritefile
+from utils.logger import logger
 #------------------------------------------
 
 #注意事项--------------------------------
@@ -117,13 +118,13 @@ class Train:
                 self.agent.memory.clear()
                 self.loss_history.append(self.agent.loss)
 
-            print(f"last_best_loss: {last_best_loss:.3f}   now_loss: {now_loss:.3f}") 
+            logger.info(f"last_best_loss: {last_best_loss:.3f}   now_loss: {now_loss:.3f}")
 
             # 保存最优训练参数
             # loss越靠近0越好
             if abs(now_loss) < abs(last_best_loss):
                 fileio.write_training_parameters_file(self.agent,best_training_parameters_path)
-                print(f"最优参数更新")
+                logger.info("最优参数更新")
                 last_best_loss = now_loss
 
             # 保存最近一次训练参数
@@ -157,9 +158,9 @@ class Train:
                 recent_success = np.mean(success_history[-100:]) * 100
                 recent_reward = np.mean(rewards_history[-100:])
                 recent_steps = np.mean(steps_history[-100:])
-                print(f"[Ep {episode + 1}] SuccessRate(100ep): {recent_success:.1f}%  AvgReward: {recent_reward:.2f}  AvgSteps: {recent_steps:.1f}  angles_error: {np.round(angles_error, 3)}  angles_error_l2: {angles_error_l2:.3f}")
+                logger.info(f"[Ep {episode + 1}] SuccessRate(100ep): {recent_success:.1f}%  AvgReward: {recent_reward:.2f}  AvgSteps: {recent_steps:.1f}  angles_error: {np.round(angles_error, 3)}  angles_error_l2: {angles_error_l2:.3f}")
             else:
-                print(f"Episode {episode + 1} angles_error: {np.round(angles_error, 3)}  angles_error_l2: {angles_error_l2:.3f}")
+                logger.info(f"Episode {episode + 1} angles_error: {np.round(angles_error, 3)}  angles_error_l2: {angles_error_l2:.3f}")
 
             
 

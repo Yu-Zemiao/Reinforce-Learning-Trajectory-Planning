@@ -5,6 +5,7 @@ import torch
 
 #自定义模块--------------------------------
 from agent.PPO_agent import PPOAgent
+from utils.logger import logger
 #------------------------------------------
 
 #注意事项----------------------------------
@@ -53,7 +54,7 @@ class ReadAndWritefile:
 
         container = np.loadtxt(path) # type: ignore
 
-        print(f"读取轨迹成功！共读取{container.shape[0]}个数据")
+        logger.info(f"读取轨迹成功！共读取{container.shape[0]}个数据")
 
         return container
 
@@ -68,7 +69,7 @@ class ReadAndWritefile:
 
         np.savetxt(path, container, fmt='%.3f')  # type: ignore
 
-        print(f"输出轨迹成功！共输出{container.shape[0] if container is not None else 0}个数据，训练数据保存至{path}")
+        logger.info(f"输出轨迹成功！共输出{container.shape[0] if container is not None else 0}个数据，训练数据保存至{path}")
 
     # 读取训练数据
     def read_training_parameters_file(self, agent:PPOAgent, read_training_parameters_file_path = None, inference = False):
@@ -87,7 +88,7 @@ class ReadAndWritefile:
         else:
             agent.policy.train() # 训练模式
 
-        print(f"读取训练数据成功！")
+        logger.info("读取训练数据成功！")
 
     # 输出训练数据
     def write_training_parameters_file(self, agent, write_training_parameters_file_path = None):
@@ -108,5 +109,5 @@ class ReadAndWritefile:
         self.container_exist_detect(reward_container)
         np.savetxt(path, reward_container, fmt='%.3f')  # type: ignore
 
-        print(f"输出奖励成功！共输出{len(reward_container)}个数据，奖励数据保存至{path}") # type: ignore
+        logger.info(f"输出奖励成功！共输出{len(reward_container)}个数据，奖励数据保存至{path}") # type: ignore
               
