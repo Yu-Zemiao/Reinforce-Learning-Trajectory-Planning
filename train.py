@@ -30,6 +30,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 fileio = ReadAndWritefile()
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
+
 reward_path = os.path.join(current_dir, "log", "data", "reward")
 reward_path = os.path.join(reward_path, "26_04_02_01")
 reward_path = os.path.join(reward_path, "reward.txt")
@@ -121,12 +122,12 @@ class Train:
             # 保存最优训练参数
             # loss越靠近0越好
             if abs(now_loss) < abs(last_best_loss):
-                fileio.write_tarining_parameters_file(self.agent,best_training_parameters_path)
-                print(f"最优参数更新，保存至{best_training_parameters_path}")
+                fileio.write_training_parameters_file(self.agent,best_training_parameters_path)
+                print(f"最优参数更新")
                 last_best_loss = now_loss
 
             # 保存最近一次训练参数
-            fileio.write_tarining_parameters_file(self.agent,last_training_parameters_path)
+            fileio.write_training_parameters_file(self.agent,last_training_parameters_path)
 
 
             # ==========================
