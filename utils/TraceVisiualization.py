@@ -74,8 +74,10 @@ def _set_scatter_points(scatter, points):
 # // 输入：// trajectory: 轨迹矩阵，n*6
 # // step: 可视化步长
 # // save_path: 保存路径
-# 注意，每个关节的角度单位是弧度！！！
+# 注意，每个关节的角度单位是角度，而非弧度
 def trace_trajectory_to_gif(trajectory, step, save_path):
+    trajectory = trajectory * 180 / np.pi
+
     trajectory = np.asarray(trajectory, dtype=float)
     if trajectory.ndim != 2 or trajectory.shape[1] != 6:
         raise ValueError("trajectory 必须是 n*6 的矩阵")
