@@ -52,11 +52,11 @@ def generate_trajectory_from_model(max_steps=4000):
 
     trajectory = np.asarray(trajectory, dtype=float)
 
-    print("Begin angle:", np.round(begin_angle, 3))
-    print("End angle:", np.round(end_angle, 3))
-    print("Trajectory shape:", trajectory.shape)
-    print("angle error", np.round(trajectory[-1] - end_angle, 3))
-    print(trajectory)
+    logger.info("Begin angle: %s", np.round(begin_angle, 3))
+    logger.info("End angle: %s", np.round(end_angle, 3))
+    logger.info("Trajectory shape:", trajectory.shape)
+    logger.info("angle error: %s", np.round(trajectory[-1] - end_angle, 3))
+    logger.info("%s", trajectory)
 
     return trajectory
 
