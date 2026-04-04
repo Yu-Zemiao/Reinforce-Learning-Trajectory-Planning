@@ -16,12 +16,8 @@ def generate_trajectory_from_model(max_steps=4000):
     env.max_steps = int(max_steps)
 
     theta_limits = env.robot.theta_limits.astype(float)
-    begin_angle = np.array([
-        np.random.uniform(theta_limits[i, 0], theta_limits[i, 1]) for i in range(6)
-    ], dtype=float)
-    end_angle = np.array([
-        np.random.uniform(theta_limits[i, 0], theta_limits[i, 1]) for i in range(6)
-    ], dtype=float)
+    end_angle = np.array([-80.339, 64.029, -49.259, 164.373, -280.029, -22.804])
+    begin_angle = np.array([0, 0, 0, 0, 0, 0])
 
     env.initial_set(begin_angle, end_angle)
     train = Train(env)
@@ -34,6 +30,7 @@ def generate_trajectory_from_model(max_steps=4000):
 
     fileio.read_training_parameters_file(train.agent, model_path, inference=True)
 
+    env.use_random_reset = False
     policy_device = next(train.agent.policy.parameters()).device
     state = torch.FloatTensor(env.train_reset()).to(policy_device)
     trajectory = [env.theta.copy()]
@@ -54,7 +51,7 @@ def generate_trajectory_from_model(max_steps=4000):
 
     logger.info("Begin angle: %s", np.round(begin_angle, 3))
     logger.info("End angle: %s", np.round(end_angle, 3))
-    logger.info("Trajectory shape:", trajectory.shape)
+    logger.info("Trajectory shape: %s", trajectory.shape)
     logger.info("angle error: %s", np.round(trajectory[-1] - end_angle, 3))
     logger.info("%s", trajectory)
 
@@ -83,6 +80,7 @@ def test_batch(batch_size=100):
             np.random.uniform(theta_limits[j, 0], theta_limits[j, 1]) for j in range(6)
         ], dtype=float)
         env.initial_set(begin_angle, end_angle)
+        env.use_random_reset = False
         state = torch.FloatTensor(env.train_reset()).to(policy_device)
         trajectory = [env.theta.copy()]
 
@@ -118,7 +116,7 @@ def test_trajectory():
 
 if __name__ == "__main__":
     
-    # test_trajectory()
-    test_batch(batch_size=100)
+    test_trajectory()
+    # test_batch(batch_size=100)
 
 
