@@ -62,7 +62,7 @@ if __name__ == "__main__":
 
     read_training_parameters_file_path = best_training_parameters_path
 
-    # fileio.read_training_parameters_file(train.agent, read_training_parameters_file_path)
+    fileio.read_training_parameters_file(train.agent, read_training_parameters_file_path)
 
     train.train()
 
