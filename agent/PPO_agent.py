@@ -16,12 +16,16 @@ import numpy as np
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class ActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, action_bound=5.0):
+    def __init__(self, state_dim, action_dim):
         super().__init__()
-        self.action_bound = float(action_bound)
+        self.action_bound = float(5.0)
 
         self.actor = nn.Sequential(
             nn.Linear(state_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -35,6 +39,10 @@ class ActorCritic(nn.Module):
 
         self.critic = nn.Sequential(
             nn.Linear(state_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -81,16 +89,11 @@ class Memory:
         self.__init__()  
 
 class PPOAgent:
-    def __init__(self, state_dim, action_dim, action_bound=5.0):
-        self.policy = ActorCritic(state_dim, action_dim, action_bound=action_bound).to(device)
-        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
-
-        # 最简单版本学习率衰减，有待优化
-        self.scheduler = torch.optim.lr_scheduler.StepLR(
-            self.optimizer,
-            step_size=100,   # 每100次episode降低一次学习率
-            gamma=0.8
-        )
+    def __init__(self, state_dim, action_dim):
+        self.policy = ActorCritic(state_dim, action_dim).to(device)
+        self.lr = 3e-4
+        self.origin_lr = self.lr
+        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=self.lr)
 
         self.memory = Memory()
 
@@ -143,8 +146,6 @@ class PPOAgent:
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
             self.optimizer.step()
-            self.scheduler.step()
-
             self.loss_history.append(loss.item())
 
         self.loss = np.mean(self.loss_history)
