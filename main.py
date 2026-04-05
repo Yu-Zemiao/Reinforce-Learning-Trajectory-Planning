@@ -51,6 +51,7 @@ if __name__ == "__main__":
     env.initial_angles = initial_angles
 
     train = Train(env)
+    env.use_random_reset = True
     fileio = ReadAndWritefile()
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -59,10 +60,12 @@ if __name__ == "__main__":
     os.makedirs(os.path.dirname(best_training_parameters_path), exist_ok=True)
     last_training_parameters_path = os.path.join(training_path, "last_training_parameters.pt")
     os.makedirs(os.path.dirname(last_training_parameters_path), exist_ok=True)
+    
 
     read_training_parameters_file_path = best_training_parameters_path
 
-    fileio.read_training_parameters_file(train.agent, read_training_parameters_file_path)
+    # 这个决定是否重新训练，还是依据上一次的结果再次训练
+    # fileio.read_training_parameters_file(train.agent, read_training_parameters_file_path)
 
     train.train()
 

@@ -24,6 +24,7 @@ from utils.logger import logger
 # 主体-------------------------------------
 
 GREEN = "\033[92m"
+RED = "\033[91m"
 RESET = "\033[0m"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -33,7 +34,6 @@ fileio = ReadAndWritefile()
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 reward_path = os.path.join(current_dir, "log", "data", "reward")
-reward_path = os.path.join(reward_path, "26_04_02_01")
 reward_path = os.path.join(reward_path, "reward.txt")
 os.makedirs(os.path.dirname(reward_path), exist_ok=True)
 write_reward_file_path = reward_path # type: ignore
@@ -52,11 +52,10 @@ class Train:
         self.agent = PPOAgent(
             state_dim=environment.state_dim,
             action_dim=environment.action_dim,
-            action_bound=environment.action_bound
         )
-        # self.agent = SACAgent(state_dim = 12, action_dim = 6)
+
         self.robot = Robot()
-        self.max_episodes = 10000
+        self.max_episodes = 10_0000
         self.batch_size = 512
         self.environment = environment
 
@@ -74,10 +73,14 @@ class Train:
 
         last_best_loss = 1.0e+8
         now_loss = 0.0
+        wether_update_lr_count = 0 # 如果episode达到一定次数没有更新，减小lr
+        biggest_loss = 0.0
 
         for episode in range(self.max_episodes):
+            logger.info(f"Episode {episode + 1}--------------------------------------------------------------------------------")
             state = torch.FloatTensor(self.environment.train_reset()).to(device)
 
+            initial_theta = self.environment.theta
             episode_reward = 0.0
             episode_steps = 0
             success = False
@@ -118,32 +121,34 @@ class Train:
                 self.agent.memory.clear()
                 self.loss_history.append(self.agent.loss)
 
-            logger.info(f"last_best_loss: {last_best_loss:.3f}   now_loss: {now_loss:.3f}")
+            # 更新lr
+            if abs(now_loss) > abs(biggest_loss):
+                self.agent.lr = self.agent.origin_lr # 如果loss为史上最大，重置lr
+                wether_update_lr_count = 0
+            else:
+                wether_update_lr_count += 1
+                if wether_update_lr_count >= 100:
+                    self.agent.lr *= 0.8
+                    logger.info(f"lr减小，当前lr: {self.agent.lr:.6f}")
+                    wether_update_lr_count = 0
 
             # 保存最优训练参数
             # loss越靠近0越好
             if abs(now_loss) < abs(last_best_loss):
                 fileio.write_training_parameters_file(self.agent,best_training_parameters_path)
-                logger.info("最优参数更新")
+                logger.info("网络最优参数更新")
                 last_best_loss = now_loss
+            # 记录最大loss
+            if abs(now_loss) > abs(biggest_loss):
+                biggest_loss = now_loss
 
             # 保存最近一次训练参数
             fileio.write_training_parameters_file(self.agent,last_training_parameters_path)
-
-
-            # ==========================
-            # if len(self.agent.memory.states) > 0:
-            #     self.agent.update()
-            #     self.model_snapshots.append(
-            #         copy.deepcopy(self.agent.policy.state_dict())
-            #     )   
-            #     self.agent.memory.clear()
             
             angles_error = self.environment.target - self.environment.theta
             angles_error_l2 = np.linalg.norm(angles_error)
             rewards_history.append(episode_reward)
             steps_history.append(episode_steps)
-
             # 如果成功的话，在success_history中记录下episode
             if success:
                 success_history.append(episode)
@@ -153,15 +158,19 @@ class Train:
             if (episode + 1) % 10 == 0:
                 fileio.write_reward_file(reward_container = rewards_history, write_reward_file_path = write_reward_file_path)
 
-            # 修改=============================================
-            if (episode + 1) % 100 == 0:
-                recent_success = np.mean(success_history[-100:]) * 100
-                recent_reward = np.mean(rewards_history[-100:])
-                recent_steps = np.mean(steps_history[-100:])
-                logger.info(f"[Ep {episode + 1}] SuccessRate(100ep): {recent_success:.1f}%  AvgReward: {recent_reward:.2f}  AvgSteps: {recent_steps:.1f}  angles_error: {np.round(angles_error, 3)}  angles_error_l2: {angles_error_l2:.3f}")
-            else:
-                logger.info(f"Episode {episode + 1} angles_error: {np.round(angles_error, 3)}  angles_error_l2: {angles_error_l2:.3f}")
-
+            # 打印输出------------------------------------------------------------------------------------------
+            logger.info(f"last_best_loss: {last_best_loss:.3f}   now_loss: {now_loss:.3f}   final_reward: {episode_reward:.3f}   lr: {self.agent.lr:.6f}")
+            logger.info(f"initial_angles: {np.round(initial_theta, 3)}")
+            logger.info(f"final_angles:   {np.round(self.environment.theta, 3)}")
+            logger.info(f"target_angles:  {np.round(self.environment.target, 3)}")
+            logger.info(f"angles_error:   {np.round(angles_error, 3)}  angles_error_l2: {angles_error_l2:.3f}")
             
+            if success:
+                logger.info(f"{GREEN}成功{RESET}")
+            else:
+                logger.info(f"{RED}失败{RESET}")
+
+            logger.info(f"-----------------------------------------------------------------------------------------")
+            logger.info(f" ")
 
     

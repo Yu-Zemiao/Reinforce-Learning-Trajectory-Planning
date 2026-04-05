@@ -109,5 +109,5 @@ class ReadAndWritefile:
         self.container_exist_detect(reward_container)
         np.savetxt(path, reward_container, fmt='%.3f')  # type: ignore
 
-        logger.info(f"输出奖励成功！共输出{len(reward_container)}个数据，奖励数据保存至{path}") # type: ignore
+        logger.info(f"输出奖励成功！共输出{len(reward_container)}个数据") # type: ignore
               

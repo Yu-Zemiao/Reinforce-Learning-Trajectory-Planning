@@ -1,5 +1,6 @@
 #引入模块----------------------------------
 import numpy as np
+from utils.logger import logger
 #------------------------------------------
 #自定义模块--------------------------------
 from robot.robot import Robot
@@ -26,7 +27,6 @@ class Environment:
 
         self.state_dim = 18
         self.action_dim = 6
-        self.action_bound = 5.0
 
         self.distance_error_threshold = 0.010 # 距离误差阈值
         self.angles_error_threshold = 1.0
@@ -61,10 +61,6 @@ class Environment:
         self._prev_dist_norm = np.linalg.norm(theta_error / self._range)
 
         return self._get_state(theta_error)
-        
-
-    # def _get_state(self, theta_error):
-    #     return np.concatenate([self.theta, self.target, theta_error])
 
     def _get_state(self, angles_error):
         norm_theta = 2.0 * (self.theta - self._lo) / self._range - 1.0
@@ -72,25 +68,46 @@ class Environment:
         norm_angles_error = angles_error / self._range
         return np.concatenate([norm_theta, norm_target, norm_angles_error]).astype(np.float32)
 
-
     def step(self, action):
         action = np.asarray(action, dtype=float)
-        action = np.clip(action, -self.action_bound, self.action_bound)
         self.theta = self.theta + action
         self.theta = np.clip(self.theta, self._lo, self._hi)
-
-        self.step_count += 1
-
+        reward = 0.0
 
         # ====================================================
         # 重中之重，最需要调整的地方
         # ====================================================
+        # angles_error = self.target - self.theta
+        # norm_angles_error = np.linalg.norm(angles_error / self._range)
+        # shaping = 20.0 * (self._prev_dist_norm - norm_angles_error)
+        # self._prev_dist_norm = norm_angles_error
+        # action_penalty = 0.01 * np.linalg.norm(action)
+        # reward = shaping - action_penalty
+
+        # 关节角度限制，并加以惩罚
+        # 如果超出范围，奖励减5并回退角度
+        for i in range(6):
+            theta = self.theta[i]
+            if theta < self._lo[i]:
+                self.theta[i] = self._lo[i]
+                self.theta[i] -= action[i]
+                reward -= 5.0
+            elif theta > self._hi[i]:
+                self.theta[i] = self._hi[i]
+                self.theta[i] -= action[i]
+                reward -= 5.0 
+
+        self.theta = self.theta.astype(float)
+
+        self.step_count += 1
+
+        # 重新设计了奖励，现在的奖励不以角度误差为基准，而是以是否更近为基准
         angles_error = self.target - self.theta
         norm_angles_error = np.linalg.norm(angles_error / self._range)
-        shaping = 20.0 * (self._prev_dist_norm - norm_angles_error)
-        self._prev_dist_norm = norm_angles_error
-        action_penalty = 0.01 * np.linalg.norm(action)
-        reward = shaping - action_penalty
+        if norm_angles_error >= self._prev_dist_norm: # 如果更远
+            reward -= 0.005
+        elif norm_angles_error < self._prev_dist_norm: # 如果更近
+            reward += 0.005
 
         done = False
         success = False
