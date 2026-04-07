@@ -28,9 +28,9 @@ DH_PARAMS = [
 
 THETA_LIMIT = [
     (-360, 360),
-    (-360, 360),
-    (-360, 360),
-    (-360, 360),
+    (-85 , 265),
+    (-175, 175),
+    (-85 , 265),
     (-360, 360),
     (-360, 360),
 ]
@@ -98,6 +98,47 @@ def compute_jacobian(theta_deg):
     return J
 
 
+def normalize_angles(angles, theta_limit):
+    """
+    将关节角度规范化到指定范围内
+    
+    参数:
+        angles: 逆运动学解算得到的关节角度列表 (长度为6)
+        theta_limit: 关节角度限制列表 (与angles对应)
+    
+    返回:
+        规范化后的关节角度列表
+    """
+    normalized_angles = []
+    for angle, limit in zip(angles, theta_limit):
+        min_angle, max_angle = limit
+        
+        # 首先将角度调整到 [0, 360) 范围内
+        angle = angle % 360
+        
+        # 计算可能的角度值（考虑周期性）
+        candidates = [angle, angle - 360, angle + 360]
+        
+        # 筛选在限制范围内的候选值
+        valid_candidates = []
+        for candidate in candidates:
+            if min_angle <= candidate <= max_angle:
+                valid_candidates.append(candidate)
+        
+        if valid_candidates:
+            # 选择与原始角度最接近的有效候选值
+            angle = min(valid_candidates, key=lambda x: abs(x - angle))
+        else:
+            # 若没有有效候选值，选择最近的边界值
+            if abs(angle - min_angle) < abs(angle - max_angle):
+                angle = min_angle
+            else:
+                angle = max_angle
+        
+        normalized_angles.append(angle)
+    return normalized_angles
+
+
 def inverse_kinematics(target_pose, theta_init=None, max_iter=200, tol=1e-3, alpha=0.5):
     """
     IK求解（位置+姿态）
@@ -127,6 +168,7 @@ def inverse_kinematics(target_pose, theta_init=None, max_iter=200, tol=1e-3, alp
 
         # 收敛判断
         if np.linalg.norm(error) < tol:
+            theta = normalize_angles(theta, THETA_LIMIT)
             return theta
 
         # === 雅可比 ===
@@ -137,10 +179,13 @@ def inverse_kinematics(target_pose, theta_init=None, max_iter=200, tol=1e-3, alp
             d_theta = alpha * np.linalg.pinv(J) @ error
         except:
             print("Jacobian inversion failed")
+            theta = normalize_angles(theta, THETA_LIMIT)
             return theta
 
         theta += d_theta
-
+    
+    # 即使未收敛，也要归一化后返回
+    theta = normalize_angles(theta, THETA_LIMIT)
     return theta
 
     
