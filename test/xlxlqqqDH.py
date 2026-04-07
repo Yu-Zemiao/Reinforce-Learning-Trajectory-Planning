@@ -49,14 +49,101 @@ def dh_transform(alpha, a, d, theta):
     ])
 
 def forward_kinematics(theta_deg):
+
     """返回各坐标系变换矩阵列表（含 Base）"""
+    position = np.zeros(6)
     theta_rad = np.deg2rad(theta_deg)
     T_list = [np.eye(4)]
     T = np.eye(4)
     for i, (alpha, a, d, ho) in enumerate(DH_PARAMS):
         T = T @ dh_transform(alpha, a, d, theta_rad[i] + ho)
         T_list.append(T.copy())
-    return T_list
+
+    end_T  = T_list[-1]
+    xyz    = end_T[:3, 3]
+
+    r31, r11, r21 = end_T[2,0], end_T[0,0], end_T[1,0]
+    r32, r33      = end_T[2,1], end_T[2,2]
+    ry = np.arctan2(-r31, np.sqrt(r11**2 + r21**2))
+    rz = np.arctan2(r21, r11)  if abs(np.cos(ry)) > 1e-6 else 0.0
+    rx = np.arctan2(r32, r33)  if abs(np.cos(ry)) > 1e-6 else 0.0
+
+    position[0] = round(xyz[0], 3)
+    position[1] = round(xyz[1], 3)
+    position[2] = round(xyz[2], 3)
+    position[3] = round(np.rad2deg(rx), 3)
+    position[4] = round(np.rad2deg(ry), 3)
+    position[5] = round(np.rad2deg(rz), 3)
+
+    return position
+
+def compute_jacobian(theta_deg):
+    """
+    数值计算雅可比矩阵（6x6）
+    """
+    eps = 1e-6
+    J = np.zeros((6, 6))
+
+    f0 = forward_kinematics(theta_deg)
+
+    for i in range(6):
+        theta_eps = theta_deg.copy()
+        theta_eps[i] += 1e-3  # 微小扰动（角度制）
+
+        f1 = forward_kinematics(theta_eps)
+
+        df = (f1 - f0) / 1e-3
+        J[:, i] = df
+
+    return J
+
+
+def inverse_kinematics(target_pose, theta_init=None, max_iter=200, tol=1e-3, alpha=0.5):
+    """
+    IK求解（位置+姿态）
+
+    target_pose: [x, y, z, rx, ry, rz]  (角度制)
+    theta_init: 初始关节角（角度制）
+    """
+
+    if theta_init is None:
+        theta = np.zeros(6)
+    else:
+        theta = theta_init.copy()
+
+    for _ in range(max_iter):
+
+        current_pose = forward_kinematics(theta)
+
+        # === 误差 ===
+        error = target_pose - current_pose
+
+        # 姿态误差 wrap（避免跳变）
+        for i in range(3, 6):
+            if error[i] > 180:
+                error[i] -= 360
+            elif error[i] < -180:
+                error[i] += 360
+
+        # 收敛判断
+        if np.linalg.norm(error) < tol:
+            return theta
+
+        # === 雅可比 ===
+        J = compute_jacobian(theta)
+
+        # === 伪逆求解 ===
+        try:
+            d_theta = alpha * np.linalg.pinv(J) @ error
+        except:
+            print("Jacobian inversion failed")
+            return theta
+
+        theta += d_theta
+
+    return theta
+
+    
 
 def get_positions(T_list):
     return np.array([T[:3, 3] for T in T_list])
@@ -244,25 +331,32 @@ if __name__ == '__main__':
     # 初始姿态
     # angles = [0.0, 90.0, 0.0, 0.0, 0.0, 0.0]
     
-    T_list = forward_kinematics(angles)
-    end_T  = T_list[-1]
-    xyz    = end_T[:3, 3]
-
-    r31, r11, r21 = end_T[2,0], end_T[0,0], end_T[1,0]
-    r32, r33      = end_T[2,1], end_T[2,2]
-    ry = np.arctan2(-r31, np.sqrt(r11**2 + r21**2))
-    rz = np.arctan2(r21, r11)  if abs(np.cos(ry)) > 1e-6 else 0.0
-    rx = np.arctan2(r32, r33)  if abs(np.cos(ry)) > 1e-6 else 0.0
+    position = forward_kinematics(angles)
 
     print(f"关节角: {angles}")
-    print(f"X  = {xyz[0]:.3f} mm")
-    print(f"Y  = {xyz[1]:.3f} mm")
-    print(f"Z  = {xyz[2]:.3f} mm")
-    print(f"Rx = {np.rad2deg(rx):.3f}°")
-    print(f"Ry = {np.rad2deg(ry):.3f}°")
-    print(f"Rz = {np.rad2deg(rz):.3f}°")
+    print(f"X  = {position[0]:.3f} mm")
+    print(f"Y  = {position[1]:.3f} mm")
+    print(f"Z  = {position[2]:.3f} mm")
+    print(f"Rx = {position[3]:.3f}°")
+    print(f"Ry = {position[4]:.3f}°")
+    print(f"Rz = {position[5]:.3f}°")
+
+    # 目标位姿（xyz + rpy）
+    target_pose = position
+
+    # 初始猜测
+    theta_init = np.zeros(6)
+
+    theta_sol = inverse_kinematics(target_pose, theta_init)
+
+    print("关节角（deg）:", theta_sol)
+
+    # 验证
+    fk_result = forward_kinematics(theta_sol)
+    print("FK验证:", fk_result)
 
     # 同时打开可视化
-    vis = Visualization()
-    vis.theta = angles
-    vis.visualize()
+    # # TODO: 可视化需要重新写，目前有报错
+    # vis = Visualization()
+    # vis.theta = angles
+    # vis.visualize()
