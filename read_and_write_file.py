@@ -72,21 +72,44 @@ class ReadAndWritefile:
         logger.info(f"输出轨迹成功！共输出{container.shape[0] if container is not None else 0}个数据，训练数据保存至{path}")
 
     # 读取训练数据
-    def read_training_parameters_file(self, agent:PPOAgent, read_training_parameters_file_path = None, inference = False):
+    def read_training_parameters_file(self, agent, read_training_parameters_file_path = None, inference = False):
         
         path = read_training_parameters_file_path if read_training_parameters_file_path is not None else self.read_training_parameters_file_path
         self.file_path_exist_detect(path) # 检查路径是否存在
         
-        state_dict = torch.load(path, map_location = device) # type: ignore
+        state_dict = torch.load(path, map_location=device) # type: ignore
 
-        # 加载模型参数
-        agent.policy.load_state_dict(state_dict)
-
-        # 推理模式暂时用不了
-        if inference:
-            agent.policy.eval() # 推理模式
+        # 根据 agent 类型加载模型参数
+        if hasattr(agent, 'policy'):
+            # PPO agent
+            agent.policy.load_state_dict(state_dict)
+            
+            # 推理模式暂时用不了
+            if inference:
+                agent.policy.eval() # 推理模式
+            else:
+                agent.policy.train() # 训练模式
+        elif hasattr(agent, 'actor'):
+            # SAC agent
+            agent.actor.load_state_dict(state_dict['actor'])
+            agent.critic1.load_state_dict(state_dict['critic1'])
+            agent.critic2.load_state_dict(state_dict['critic2'])
+            agent.target_critic1.load_state_dict(state_dict['target_critic1'])
+            agent.target_critic2.load_state_dict(state_dict['target_critic2'])
+            
+            if 'log_alpha' in state_dict:
+                agent.log_alpha = state_dict['log_alpha']
+            
+            if inference:
+                agent.actor.eval()
+                agent.critic1.eval()
+                agent.critic2.eval()
+            else:
+                agent.actor.train()
+                agent.critic1.train()
+                agent.critic2.train()
         else:
-            agent.policy.train() # 训练模式
+            raise ValueError("不支持的 agent 类型")
 
         logger.info("读取训练数据成功！")
 
@@ -97,7 +120,23 @@ class ReadAndWritefile:
         self.file_path_exist_detect(path) # 检查路径是否存在
 
         try:
-            torch.save(agent.policy.state_dict(), path) # type: ignore
+            # 根据 agent 类型保存模型参数
+            if hasattr(agent, 'policy'):
+                # PPO agent
+                torch.save(agent.policy.state_dict(), path) # type: ignore
+            elif hasattr(agent, 'actor'):
+                # SAC agent
+                state_dict = {
+                    'actor': agent.actor.state_dict(),
+                    'critic1': agent.critic1.state_dict(),
+                    'critic2': agent.critic2.state_dict(),
+                    'target_critic1': agent.target_critic1.state_dict(),
+                    'target_critic2': agent.target_critic2.state_dict(),
+                    'log_alpha': agent.log_alpha
+                }
+                torch.save(state_dict, path)
+            else:
+                raise ValueError("不支持的 agent 类型")
         except RuntimeError as e:
             # 如果文件被占用或无权限，这里会给出明确的中文提示，而不是抛出一长串底层的 Traceback
             raise RuntimeError(f"保存失败！请检查文件是否被占用或是否有写入权限。\n目标路径: {path}\n底层报错: {e}")

@@ -65,3 +65,5 @@ subject                 一些独立的小代码，用于实现某些功能
 2 改run.log最小限制  --zxl
 3 小范围训练模型（20度以内）-- yzm
 4 尝试SAC算法 -- zxl
+
+python main.py --device 0/1/cpu --algorithm PPO/SAC

@@ -13,7 +13,8 @@ import numpy as np
 #------------------------------------------
 # 主体-------------------------------------
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device将由外部传入
+device = None
 
 class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim):
@@ -52,7 +53,6 @@ class ActorCritic(nn.Module):
         )
 
     def act(self, state):
-        state = state.to(device)
         mean = torch.tanh(self.actor(state)) * self.action_bound
         log_std = torch.clamp(self.log_std, -2.0, 1.0)
         std = torch.exp(log_std)
@@ -89,8 +89,17 @@ class Memory:
         self.__init__()  
 
 class PPOAgent:
-    def __init__(self, state_dim, action_dim):
-        self.policy = ActorCritic(state_dim, action_dim).to(device)
+    def __init__(self, state_dim, action_dim, device=None):
+        # 设置设备
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = device
+        # 更新全局变量以便其他地方使用
+        import agent.PPO_agent as ppo_module
+        ppo_module.device = self.device
+        
+        self.policy = ActorCritic(state_dim, action_dim).to(self.device)
         self.lr = 3e-4
         self.origin_lr = self.lr
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=self.lr)
@@ -108,9 +117,9 @@ class PPOAgent:
         self.loss_history = []
 
     def update(self):
-        states = torch.stack(self.memory.states).to(device)
-        actions = torch.stack(self.memory.actions).to(device)
-        old_logprobs = torch.stack(self.memory.logprobs).to(device).detach()
+        states = torch.stack(self.memory.states).to(self.device)
+        actions = torch.stack(self.memory.actions).to(self.device)
+        old_logprobs = torch.stack(self.memory.logprobs).to(self.device).detach()
         rewards = self.memory.rewards
         dones = self.memory.dones
 
@@ -135,8 +144,8 @@ class PPOAgent:
             advantages.insert(0, gae)
             returns.insert(0, gae + values[t])
 
-        advantages = torch.tensor(advantages, dtype=torch.float32).to(device)
-        returns = torch.tensor(returns, dtype=torch.float32).to(device)
+        advantages = torch.tensor(advantages, dtype=torch.float32).to(self.device)
+        returns = torch.tensor(returns, dtype=torch.float32).to(self.device)
 
         for _ in range(self.K_epochs):
             logprobs, state_values, entropy = self.policy.evaluate(states, actions)

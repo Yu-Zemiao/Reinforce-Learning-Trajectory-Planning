@@ -27,7 +27,8 @@ GREEN = "\033[92m"
 RED = "\033[91m"
 RESET = "\033[0m"
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device 将由 main.py 传入
+device = None
 
 fileio = ReadAndWritefile()
 
@@ -48,11 +49,38 @@ os.makedirs(os.path.dirname(last_training_parameters_path), exist_ok=True)
 
 class Train:
     
-    def __init__(self, environment:Environment):
-        self.agent = PPOAgent(
-            state_dim=environment.state_dim,
-            action_dim=environment.action_dim,
-        )
+    def __init__(self, environment:Environment, device=None, algorithm='PPO'):
+        # 如果没有传入设备，使用默认设置
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        else:
+            self.device = device
+        # 更新全局变量以便其他地方使用
+        import train as train_module
+        train_module.device = self.device
+        
+        # 记录使用的算法
+        self.algorithm = algorithm
+        logger.info(f"{'='*80}")
+        logger.info(f"使用算法: {self.algorithm}")
+        logger.info(f"设备: {self.device}")
+        logger.info(f"{'='*80}\n")
+        
+        # 根据算法类型创建不同的agent
+        if algorithm == 'PPO':
+            self.agent = PPOAgent(
+                state_dim=environment.state_dim,
+                action_dim=environment.action_dim,
+                device=self.device
+            )
+        elif algorithm == 'SAC':
+            self.agent = SACAgent(
+                state_dim=environment.state_dim,
+                action_dim=environment.action_dim,
+                device=self.device
+            )
+        else:
+            raise ValueError(f"不支持的算法类型: {algorithm}")
 
         self.robot = Robot()
         self.max_episodes = 10_0000
@@ -105,16 +133,21 @@ class Train:
             for idx, (initial_angles, target_angles) in enumerate(self.test_cases):
                 # 设置测试场景
                 test_env.initial_set(initial_angles, target_angles)
-                state = torch.FloatTensor(test_env.train_reset()).to(device)
+                state = torch.FloatTensor(test_env.train_reset()).to(self.device)
                 
                 # 运行测试场景
                 for step in range(test_env.max_steps):
-                    # 使用确定性策略：直接用actor输出的均值，不采样
-                    mean = torch.tanh(self.agent.policy.actor(state)) * self.agent.policy.action_bound
-                    action = mean  # 确定性动作
+                    # 使用确定性策略：根据算法类型使用不同的方式
+                    if self.algorithm == 'PPO':
+                        # PPO: 直接用actor输出的均值，不采样
+                        mean = torch.tanh(self.agent.policy.actor(state)) * self.agent.policy.action_bound
+                        action = mean  # 确定性动作
+                    else:  # SAC
+                        # SAC: 使用确定性采样
+                        action, _ = self.agent.actor.sample(state, deterministic=True)
                     
                     next_state, _, done, _ = test_env.step(action.detach().cpu().numpy())
-                    state = torch.FloatTensor(next_state).to(device)
+                    state = torch.FloatTensor(next_state).to(self.device)
                     
                     if done:
                         break
@@ -141,7 +174,7 @@ class Train:
 
         for episode in range(self.max_episodes):
             logger.info(f"Episode {episode + 1}--------------------------------------------------------------------------------")
-            state = torch.FloatTensor(self.environment.train_reset()).to(device)
+            state = torch.FloatTensor(self.environment.train_reset()).to(self.device)
 
             initial_theta = self.environment.theta
             episode_reward = 0.0
@@ -153,36 +186,58 @@ class Train:
             
             for step in range(self.environment.max_steps):
 
-                action, log_prob = self.agent.policy.act(state)
+                # 根据算法类型选择不同的act方法
+                if self.algorithm == 'PPO':
+                    action, log_prob = self.agent.policy.act(state)
+                else:  # SAC
+                    action, log_prob = self.agent.act(state)
 
                 next_state, reward, done, success = self.environment.step(
                     action.detach().cpu().numpy(),
                 )
                 
-                # 训练用
-                self.agent.memory.states.append(state)
-                self.agent.memory.actions.append(action)
-                self.agent.memory.logprobs.append(log_prob)
-                self.agent.memory.rewards.append(reward)
-                self.agent.memory.dones.append(done)
+                # 根据算法类型使用不同的存储方式
+                if self.algorithm == 'PPO':
+                    # PPO使用列表存储
+                    self.agent.memory.states.append(state)
+                    self.agent.memory.actions.append(action)
+                    self.agent.memory.logprobs.append(log_prob)
+                    self.agent.memory.rewards.append(reward)
+                    self.agent.memory.dones.append(done)
+                else:  # SAC
+                    # SAC使用ReplayBuffer存储
+                    next_state_tensor = torch.FloatTensor(next_state).to(self.device)
+                    # 使用 store_transition 方法，自动处理 tensor 到 numpy 的转换
+                    self.agent.store_transition(state, action, reward, next_state_tensor, done)
 
                 # 自用
                 self.final_reward_memory.append(reward)
 
-                state = torch.FloatTensor(next_state).to(device)
+                state = torch.FloatTensor(next_state).to(self.device)
                 episode_reward += reward
                 episode_steps += 1
 
                 if done:
                     break
 
-            # 这里应该是每个episode最多训练一次
-            if len(self.agent.memory.states) >= self.batch_size: # 这个值是不是应该调大一点，不让其每次都训练
-                self.agent.update()
-                update_count += 1
-                now_loss = self.agent.loss
-                self.agent.memory.clear()
-                self.loss_history.append(self.agent.loss)
+            # 根据算法类型进行更新
+            if self.algorithm == 'PPO':
+                # PPO每个episode结束后更新一次
+                if len(self.agent.memory.states) >= self.batch_size:
+                    self.agent.update()
+                    update_count += 1
+                    now_loss = self.agent.loss
+                    self.agent.memory.clear()
+                    self.loss_history.append(self.agent.loss)
+            else:  # SAC
+                # SAC在每个step都可以更新（如果缓冲区足够大）
+                if len(self.agent.memory) >= self.agent.batch_size:
+                    # 每个episode更新多次
+                    for _ in range(self.environment.max_steps // 10):  # 适当减少更新频率
+                        self.agent.update()
+                    update_count += 1
+                    now_loss = self.agent.loss
+                    self.loss_history.append(self.agent.loss)
 
             # 更新lr
             if abs(now_loss) > abs(biggest_loss):
