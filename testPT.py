@@ -26,7 +26,7 @@ def generate_trajectory_from_model(max_steps=4000):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     training_path = os.path.join(current_dir, "log", "train")
     best_training_parameters_path = os.path.join(training_path, "best_training_parameters.pt")
-    model_path = best_training_parameters_path if os.path.exists(best_training_parameters_path) else last_training_parameters_path
+    model_path = best_training_parameters_path
 
     fileio.read_training_parameters_file(train.agent, model_path, inference=True)
 
@@ -37,7 +37,8 @@ def generate_trajectory_from_model(max_steps=4000):
 
     for _ in range(env.max_steps):
         with torch.no_grad():
-            mean_action = torch.tanh(train.agent.policy.actor(state)) * env.action_bound
+            # 使用确定性策略：直接使用actor输出的均值
+            mean_action = torch.tanh(train.agent.policy.actor(state)) * train.agent.policy.action_bound
             action = mean_action.detach().cpu().numpy()
 
         next_state, reward, done, success = env.step(action)
@@ -65,7 +66,7 @@ def test_batch(batch_size=100):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     training_path = os.path.join(current_dir, "log", "train")
     best_training_parameters_path = os.path.join(training_path, "best_training_parameters.pt")
-    model_path = best_training_parameters_path if os.path.exists(best_training_parameters_path) else last_training_parameters_path
+    model_path = best_training_parameters_path
 
     train = Train(env)
     fileio = ReadAndWritefile()
@@ -86,7 +87,8 @@ def test_batch(batch_size=100):
 
         for _ in range(env.max_steps):
             with torch.no_grad():
-                mean_action = torch.tanh(train.agent.policy.actor(state)) * env.action_bound
+                # 使用确定性策略：直接使用actor输出的均值
+                mean_action = torch.tanh(train.agent.policy.actor(state)) * train.agent.policy.action_bound
                 action = mean_action.detach().cpu().numpy()
 
             next_state, reward, done, success = env.step(action)
@@ -116,7 +118,7 @@ def test_trajectory():
 
 if __name__ == "__main__":
     
-    test_trajectory()
-    # test_batch(batch_size=100)
+    # test_trajectory()
+    test_batch(batch_size=100)
 
 
