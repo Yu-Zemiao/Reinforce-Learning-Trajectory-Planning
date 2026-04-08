@@ -29,7 +29,7 @@ class Environment:
         self.action_dim = 6
 
         self.distance_error_threshold = 0.010 # 距离误差阈值
-        self.angles_error_threshold = 1.0
+        self.angles_error_threshold = 0.1
         self._lo = self.robot.theta_limits[:, 0].astype(float)
         self._hi = self.robot.theta_limits[:, 1].astype(float)
         self._range = self._hi - self._lo
@@ -106,12 +106,6 @@ class Environment:
         # ====================================================
         # 重中之重，最需要调整的地方
         # ====================================================
-        # angles_error = self.target - self.theta
-        # norm_angles_error = np.linalg.norm(angles_error / self._range)
-        # shaping = 20.0 * (self._prev_dist_norm - norm_angles_error)
-        # self._prev_dist_norm = norm_angles_error
-        # action_penalty = 0.01 * np.linalg.norm(action)
-        # reward = shaping - action_penalty
 
         # 关节角度限制，并加以惩罚
         # 如果超出范围，奖励减5并回退角度
@@ -151,13 +145,14 @@ class Environment:
 
         done = False
         success = False
+
+        # 新一种reward，依据最终与目标角度误差计算奖励
         if self.arrive_detect(self.theta, self.target): # 到达目标位姿
             reward += 200.0
             done = True
             success = True
 
         if self.step_count >= self.max_steps: # 移动次数超出要求
-            reward -= 5.0
             done = True
             success = False
         
@@ -169,6 +164,22 @@ class Environment:
                 self.curriculum_stage += 1
                 self.success_count = 0
                 logger.info(f"课程难度提升至: {self.curriculum_difficulty:.2f}")
+
+        # if done and not success:
+        #     if norm_angles_error_l2 < 0.5:
+        #         reward += 150.0
+        #     elif norm_angles_error_l2 < 1:
+        #         reward += 100.0
+        #     elif norm_angles_error_l2 < 2:
+        #         reward += 50.0
+        #     elif norm_angles_error_l2 < 5:
+        #         reward += 20.0
+        #     elif norm_angles_error_l2 < 10:
+        #         reward += 10.0
+        #     elif norm_angles_error_l2 < 20:
+        #         reward += 5.0
+        #     elif norm_angles_error_l2 < 50:
+        #         reward += 1.0
 
         return self._get_state(angles_error), float(reward), done, success
 

@@ -55,7 +55,7 @@ if __name__ == "__main__":
     fileio = ReadAndWritefile()
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    training_path = os.path.join(current_dir, "log", "train")
+    training_path = os.path.join(current_dir, "log", "pt_version","0.1.3")
     best_training_parameters_path = os.path.join(training_path, "best_training_parameters.pt")
     os.makedirs(os.path.dirname(best_training_parameters_path), exist_ok=True)
     last_training_parameters_path = os.path.join(training_path, "last_training_parameters.pt")
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     read_training_parameters_file_path = best_training_parameters_path
 
     # 这个决定是否重新训练，还是依据上一次的结果再次训练
-    # fileio.read_training_parameters_file(train.agent, read_training_parameters_file_path)
+    fileio.read_training_parameters_file(train.agent, read_training_parameters_file_path)
 
     train.train()
 
