@@ -5,7 +5,7 @@ import sys
 import threading
 import ctypes
 from pathlib import Path
-from logging.handlers import QueueHandler, QueueListener
+from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 
 
 class _ColorFormatter(logging.Formatter):
@@ -83,7 +83,14 @@ class _RootAsyncLoggerSingleton:
         self._stream_handler.setLevel(logging.INFO)
         self._stream_handler.setFormatter(color_formatter)
 
-        self._file_handler = logging.FileHandler(filename=self._log_file, encoding="utf-8")
+        # 使用 RotatingFileHandler 限制日志文件大小为 20MB
+        # 当日志文件达到 20MB 时会自动轮转，保留最近 5 个备份文件
+        self._file_handler = RotatingFileHandler(
+            filename=self._log_file,
+            maxBytes=15 * 1024 * 1024,  # 20MB
+            backupCount=3,
+            encoding="utf-8"
+        )
         self._file_handler.setLevel(logging.DEBUG)
         self._file_handler.setFormatter(formatter)
 
