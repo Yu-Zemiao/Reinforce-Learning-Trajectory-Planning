@@ -16,12 +16,8 @@ def generate_trajectory_from_model(max_steps=4000):
     env.max_steps = int(max_steps)
 
     theta_limits = env.robot.theta_limits.astype(float)
-    begin_angle = np.array([
-        np.random.uniform(theta_limits[i, 0], theta_limits[i, 1]) for i in range(6)
-    ], dtype=float)
-    end_angle = np.array([
-        np.random.uniform(theta_limits[i, 0], theta_limits[i, 1]) for i in range(6)
-    ], dtype=float)
+    end_angle = np.array([-80.339, 64.029, -49.259, 164.373, -280.029, -22.804])
+    begin_angle = np.array([0, 0, 0, 0, 0, 0])
 
     env.initial_set(begin_angle, end_angle)
     train = Train(env)
@@ -30,17 +26,19 @@ def generate_trajectory_from_model(max_steps=4000):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     training_path = os.path.join(current_dir, "log", "train")
     best_training_parameters_path = os.path.join(training_path, "best_training_parameters.pt")
-    model_path = best_training_parameters_path if os.path.exists(best_training_parameters_path) else last_training_parameters_path
+    model_path = best_training_parameters_path
 
     fileio.read_training_parameters_file(train.agent, model_path, inference=True)
 
+    env.use_random_reset = False
     policy_device = next(train.agent.policy.parameters()).device
     state = torch.FloatTensor(env.train_reset()).to(policy_device)
     trajectory = [env.theta.copy()]
 
     for _ in range(env.max_steps):
         with torch.no_grad():
-            mean_action = torch.tanh(train.agent.policy.actor(state)) * env.action_bound
+            # 使用确定性策略：直接使用actor输出的均值
+            mean_action = torch.tanh(train.agent.policy.actor(state)) * train.agent.policy.action_bound
             action = mean_action.detach().cpu().numpy()
 
         next_state, reward, done, success = env.step(action)
@@ -54,7 +52,7 @@ def generate_trajectory_from_model(max_steps=4000):
 
     logger.info("Begin angle: %s", np.round(begin_angle, 3))
     logger.info("End angle: %s", np.round(end_angle, 3))
-    logger.info("Trajectory shape:", trajectory.shape)
+    logger.info("Trajectory shape: %s", trajectory.shape)
     logger.info("angle error: %s", np.round(trajectory[-1] - end_angle, 3))
     logger.info("%s", trajectory)
 
@@ -68,7 +66,7 @@ def test_batch(batch_size=100):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     training_path = os.path.join(current_dir, "log", "train")
     best_training_parameters_path = os.path.join(training_path, "best_training_parameters.pt")
-    model_path = best_training_parameters_path if os.path.exists(best_training_parameters_path) else last_training_parameters_path
+    model_path = best_training_parameters_path
 
     train = Train(env)
     fileio = ReadAndWritefile()
@@ -83,12 +81,14 @@ def test_batch(batch_size=100):
             np.random.uniform(theta_limits[j, 0], theta_limits[j, 1]) for j in range(6)
         ], dtype=float)
         env.initial_set(begin_angle, end_angle)
+        env.use_random_reset = False
         state = torch.FloatTensor(env.train_reset()).to(policy_device)
         trajectory = [env.theta.copy()]
 
         for _ in range(env.max_steps):
             with torch.no_grad():
-                mean_action = torch.tanh(train.agent.policy.actor(state)) * env.action_bound
+                # 使用确定性策略：直接使用actor输出的均值
+                mean_action = torch.tanh(train.agent.policy.actor(state)) * train.agent.policy.action_bound
                 action = mean_action.detach().cpu().numpy()
 
             next_state, reward, done, success = env.step(action)

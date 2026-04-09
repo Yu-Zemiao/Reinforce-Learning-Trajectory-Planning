@@ -16,12 +16,16 @@ import numpy as np
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class ActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, action_bound=5.0):
+    def __init__(self, state_dim, action_dim):
         super().__init__()
-        self.action_bound = float(action_bound)
+        self.action_bound = float(5.0)
 
         self.actor = nn.Sequential(
             nn.Linear(state_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -35,6 +39,10 @@ class ActorCritic(nn.Module):
 
         self.critic = nn.Sequential(
             nn.Linear(state_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -81,16 +89,11 @@ class Memory:
         self.__init__()  
 
 class PPOAgent:
-    def __init__(self, state_dim, action_dim, action_bound=5.0):
-        self.policy = ActorCritic(state_dim, action_dim, action_bound=action_bound).to(device)
-        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=3e-4)
-
-        # 最简单版本学习率衰减，有待优化
-        self.scheduler = torch.optim.lr_scheduler.StepLR(
-            self.optimizer,
-            step_size=100,   # 每100次episode降低一次学习率
-            gamma=0.8
-        )
+    def __init__(self, state_dim, action_dim):
+        self.policy = ActorCritic(state_dim, action_dim).to(device)
+        self.lr = 3e-4
+        self.origin_lr = self.lr
+        self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=self.lr)
 
         self.memory = Memory()
 
@@ -98,7 +101,9 @@ class PPOAgent:
         self.eps_clip = 0.2
         self.K_epochs = 4
         self.value_coef = 0.5
-        self.entropy_coef = 0.01
+        self.entropy_coef = 0.02  # 增加熵系数，鼓励探索
+        self.gae_lambda = 0.95  # 添加GAE参数
+        self.max_grad_norm = 0.5
         self.loss = 0
         self.loss_history = []
 
@@ -109,26 +114,40 @@ class PPOAgent:
         rewards = self.memory.rewards
         dones = self.memory.dones
 
-        # 计算回报
+        # 使用GAE计算优势函数和回报
+        with torch.no_grad():
+            values = self.policy.critic(states).squeeze()
+            
+        advantages = []
         returns = []
-        discounted = 0
-        for r, done in zip(reversed(rewards), reversed(dones)):
-            if done:
-                discounted = 0
-            discounted = r + self.gamma * discounted
-            returns.insert(0, discounted) # 将每次新的值插到列表最前面，即倒序排序
+        gae = 0
+        
+        # 从后向前计算GAE
+        for t in reversed(range(len(rewards))):
+            if t == len(rewards) - 1:
+                next_value = 0.0
+            else:
+                next_value = values[t + 1]
+            
+            delta = rewards[t] + self.gamma * next_value * (1 - dones[t]) - values[t]
+            gae = delta + self.gamma * self.gae_lambda * (1 - dones[t]) * gae
+            
+            advantages.insert(0, gae)
+            returns.insert(0, gae + values[t])
 
+        advantages = torch.tensor(advantages, dtype=torch.float32).to(device)
         returns = torch.tensor(returns, dtype=torch.float32).to(device)
 
         for _ in range(self.K_epochs):
             logprobs, state_values, entropy = self.policy.evaluate(states, actions)
 
             ratios = torch.exp(logprobs - old_logprobs)
-            advantages = returns - state_values.detach()
-            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+            
+            # 使用GAE优势函数
+            advantages_normalized = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-            surr1 = ratios * advantages
-            surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
+            surr1 = ratios * advantages_normalized
+            surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages_normalized
 
             policy_loss = -torch.min(surr1, surr2).mean()
             value_loss = nn.MSELoss()(state_values, returns)
@@ -141,10 +160,8 @@ class PPOAgent:
 
             self.optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=0.5)
+            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=self.max_grad_norm)
             self.optimizer.step()
-            self.scheduler.step()
-
             self.loss_history.append(loss.item())
 
         self.loss = np.mean(self.loss_history)
