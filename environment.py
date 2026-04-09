@@ -34,11 +34,11 @@ class Environment:
         self._hi = self.robot.theta_limits[:, 1].astype(float)
         self._range = self._hi - self._lo
         self._prev_dist_norm = 0.0
-        self.use_random_reset = False
+        self.use_random_reset = True
         
         # 课程学习参数
         self.curriculum_stage = 0  # 当前课程阶段
-        self.curriculum_difficulty = 0.0  # 当前难度系数 [0, 1]
+        self.curriculum_difficulty = 0.1  # 初始难度系数 [0, 1]，设置为0.2以便一开始就有随机性
         self.success_count = 0  # 成功计数器
         self.curriculum_update_threshold = 10  # 成功多少次后增加难度
         
