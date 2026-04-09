@@ -65,7 +65,7 @@ if __name__ == "__main__":
     read_training_parameters_file_path = best_training_parameters_path
 
     # 这个决定是否重新训练，还是依据上一次的结果再次训练
-    fileio.read_training_parameters_file(train.agent, read_training_parameters_file_path)
+    # fileio.read_training_parameters_file(train.agent, read_training_parameters_file_path)
 
     train.train()
 

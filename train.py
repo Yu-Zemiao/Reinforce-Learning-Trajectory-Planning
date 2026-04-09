@@ -64,6 +64,8 @@ class Train:
         self.final_reward_memory = []
 
         self.loss_history = []
+
+        self.the_smallest_lr_threshold = 1.0e-6
         
         # 定义测试集：10个代表性场景
         self.test_cases = [
@@ -91,6 +93,7 @@ class Train:
         
         self.best_test_error = float('inf')  # 记录最优测试误差
         self.test_frequency = 20  # 每20个episode测试一次
+        self.wether_test = 0 # 是否测试
     
     def evaluate_on_test_set(self):
         """
@@ -141,7 +144,10 @@ class Train:
 
         for episode in range(self.max_episodes):
             logger.info(f"Episode {episode + 1}--------------------------------------------------------------------------------")
-            state = torch.FloatTensor(self.environment.train_reset()).to(device)
+            # state = torch.FloatTensor(self.environment.train_reset()).to(device)
+
+            state, max_distance = self.environment.small_angle_train_reset()
+            state = torch.FloatTensor(state).to(device)
 
             initial_theta = self.environment.theta
             episode_reward = 0.0
@@ -155,8 +161,13 @@ class Train:
 
                 action, log_prob = self.agent.policy.act(state)
 
-                next_state, reward, done, success = self.environment.step(
+                # next_state, reward, done, success = self.environment.step(
+                #     action.detach().cpu().numpy(),
+                # )
+
+                next_state, reward, done, success = self.environment.small_step(
                     action.detach().cpu().numpy(),
+                    max_distance
                 )
                 
                 # 训练用
@@ -190,7 +201,7 @@ class Train:
                 wether_update_lr_count = 0
             else:
                 wether_update_lr_count += 1
-                if wether_update_lr_count >= 100:
+                if wether_update_lr_count >= 100 and self.agent.lr > self.the_smallest_lr_threshold:
                     self.agent.lr *= 0.8
                     logger.info(f"lr减小，当前lr: {self.agent.lr:.6f}")
                     wether_update_lr_count = 0
@@ -206,7 +217,7 @@ class Train:
             fileio.write_training_parameters_file(self.agent,last_training_parameters_path)
             
             # 每test_frequency个episode进行一次测试评估
-            if (episode + 1) % self.test_frequency == 0:
+            if (episode + 1) % self.test_frequency == 0 and self.wether_test:
                 logger.info(f"{'='*80}")
                 logger.info(f"开始测试集评估 (Episode {episode + 1})")
                 logger.info(f"{'='*80}")
@@ -241,7 +252,7 @@ class Train:
                 fileio.write_reward_file(reward_container = rewards_history, write_reward_file_path = write_reward_file_path)
 
             # 打印输出------------------------------------------------------------------------------------------
-            logger.info(f"last_best_loss: {last_best_loss:.3f}   now_loss: {now_loss:.3f}   final_reward: {episode_reward:.3f}   lr: {self.agent.lr:.6f}")
+            logger.info(f"last_best_loss: {last_best_loss:.3f}   now_loss: {now_loss:.3f}   final_reward: {episode_reward:.3f}   lr: {self.agent.lr:.6f}   step: {episode_steps}")
             logger.info(f"initial_angles: {np.round(initial_theta, 3)}")
             logger.info(f"final_angles:   {np.round(self.environment.theta, 3)}")
             logger.info(f"target_angles:  {np.round(self.environment.target, 3)}")

@@ -18,7 +18,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super().__init__()
-        self.action_bound = float(5.0)
+        self.action_bound = 0.1
 
         self.actor = nn.Sequential(
             nn.Linear(state_dim, 256),
