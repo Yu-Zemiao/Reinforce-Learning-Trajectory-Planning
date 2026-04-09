@@ -24,7 +24,7 @@ def generate_trajectory_from_model(max_steps=4000):
     fileio = ReadAndWritefile()
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    training_path = os.path.join(current_dir, "log", "train")
+    training_path = os.path.join(current_dir, "log", "pt_version", "0.1.3", "PPO")
     best_training_parameters_path = os.path.join(training_path, "best_training_parameters.pt")
     model_path = best_training_parameters_path
 
@@ -64,7 +64,7 @@ def test_batch(batch_size=100):
     env = Environment()
     theta_limits = env.robot.theta_limits.astype(float)
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    training_path = os.path.join(current_dir, "log", "train")
+    training_path = os.path.join(current_dir, "log", "pt_version", "0.1.3", "PPO")
     best_training_parameters_path = os.path.join(training_path, "best_training_parameters.pt")
     model_path = best_training_parameters_path
 
@@ -112,13 +112,13 @@ def test_trajectory():
     trajectory = generate_trajectory_from_model(max_steps=4000)
 
     GIF_path = "test_trajectory.gif"
-    trace_trajectory_to_gif(trajectory, step=10, save_path=GIF_path)
+    trace_trajectory_to_gif(trajectory, step=4, save_path=GIF_path)
     logger.info(f"GIF generated, {GIF_path}")
 
 
 if __name__ == "__main__":
     
-    # test_trajectory()
-    test_batch(batch_size=100)
+    test_trajectory()
+    # test_batch(batch_size=100)
 
 
