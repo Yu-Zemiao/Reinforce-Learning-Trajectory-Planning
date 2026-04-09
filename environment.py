@@ -165,21 +165,6 @@ class Environment:
                 self.success_count = 0
                 logger.info(f"课程难度提升至: {self.curriculum_difficulty:.2f}")
 
-        # if done and not success:
-        #     if norm_angles_error_l2 < 0.5:
-        #         reward += 150.0
-        #     elif norm_angles_error_l2 < 1:
-        #         reward += 100.0
-        #     elif norm_angles_error_l2 < 2:
-        #         reward += 50.0
-        #     elif norm_angles_error_l2 < 5:
-        #         reward += 20.0
-        #     elif norm_angles_error_l2 < 10:
-        #         reward += 10.0
-        #     elif norm_angles_error_l2 < 20:
-        #         reward += 5.0
-        #     elif norm_angles_error_l2 < 50:
-        #         reward += 1.0
 
         return self._get_state(angles_error), float(reward), done, success
 
