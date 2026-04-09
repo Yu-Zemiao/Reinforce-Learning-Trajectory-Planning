@@ -45,13 +45,18 @@ class ReplayBuffer:
 
 
 class SACActor(nn.Module):
-    """SAC的策略网络（Actor）"""
+    """SAC的策略网络（Actor）- 5层深度网络（与PPO一致）"""
     def __init__(self, state_dim, action_dim, action_bound=5.0):
         super().__init__()
         self.action_bound = action_bound
         
+        # 5层深度网络，与PPO保持一致
         self.network = nn.Sequential(
             nn.Linear(state_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -67,7 +72,8 @@ class SACActor(nn.Module):
         x = self.network(state)
         mean = self.mean_layer(x)
         log_std = self.log_std_layer(x)
-        log_std = torch.clamp(log_std, -20, 2)  # 限制标准差范围
+        # 提高log_std下限以增加探索（-2而非-20）
+        log_std = torch.clamp(log_std, -2, 2)  # 限制标准差范围，增强探索
         
         return mean, log_std
     
@@ -95,12 +101,15 @@ class SACActor(nn.Module):
 
 
 class SACCritic(nn.Module):
-    """SAC的Q网络（Critic）"""
+    """SAC的Q网络（Critic）- 5层深度网络（与PPO一致）"""
     def __init__(self, state_dim, action_dim):
         super().__init__()
         
+        # 5层深度网络，与PPO保持一致
         self.network = nn.Sequential(
             nn.Linear(state_dim + action_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -164,6 +173,12 @@ class SACAgent:
         self.loss = 0
         self.loss_history = []
         
+        # 奖励归一化参数（使用running mean/std）
+        self.reward_mean = 0.0
+        self.reward_std = 1.0
+        self.reward_count = 0
+        self.reward_clip = 10.0  # 奖励裁剪范围
+        
         # 用于兼容PPO接口的临时存储
         self.temp_states = []
         self.temp_actions = []
@@ -183,12 +198,31 @@ class SACAgent:
         # 兼容PPO的返回格式
         return action, log_prob.squeeze() if log_prob is not None else torch.tensor(0.0)
     
+    def normalize_reward(self, reward):
+        """归一化奖励（使用running statistics）"""
+        # 更新统计信息
+        self.reward_count += 1
+        delta = reward - self.reward_mean
+        self.reward_mean += delta / self.reward_count
+        delta2 = reward - self.reward_mean
+        self.reward_std = np.sqrt(self.reward_std**2 + delta * delta2)
+        self.reward_std = max(self.reward_std, 1e-8)  # 避免除零
+        
+        # 归一化并裁剪
+        normalized_reward = (reward - self.reward_mean) / self.reward_std
+        normalized_reward = np.clip(normalized_reward, -self.reward_clip, self.reward_clip)
+        
+        return normalized_reward
+    
     def store_transition(self, state, action, reward, next_state, done):
         """存储transition到经验回放缓冲区"""
+        # 归一化奖励
+        normalized_reward = self.normalize_reward(reward)
+        
         self.memory.push(
             state.cpu().numpy() if isinstance(state, torch.Tensor) else state,
             action.cpu().numpy() if isinstance(action, torch.Tensor) else action,
-            reward,
+            normalized_reward,  # 使用归一化后的奖励
             next_state.cpu().numpy() if isinstance(next_state, torch.Tensor) else next_state,
             done
         )
