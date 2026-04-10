@@ -56,7 +56,7 @@ class Train:
 
         self.robot = Robot()
         self.max_episodes = 10_0000
-        self.batch_size = 512
+        self.batch_size = 100
         self.environment = environment
 
         self.training_parameter_saving_path = None
@@ -240,6 +240,19 @@ class Train:
             
             angles_error = self.environment.target - self.environment.theta
             angles_error_l2 = np.linalg.norm(angles_error)
+            initial_error = self.environment.target - initial_theta
+
+            # 构造每个关节的误差字符串，方便判断
+            error_parts = []
+            for i in range(len(angles_error)):
+                arrow = "↑" if abs(angles_error[i]) > abs(initial_error[i]) else "↓"
+                error_parts.append(f"{abs(angles_error[i]):.3f}{arrow}")
+            error_str = f"[{', '.join(error_parts)}]"
+            # 整体L2箭头：更靠近目标为↑，远离为↓
+            global_arrow = "↑" if (np.linalg.norm(initial_error) < angles_error_l2) else "↓"
+            error_str_L2 = f"from {np.linalg.norm(initial_error):.3f} to {angles_error_l2:.3f} {global_arrow}"
+            
+
             rewards_history.append(episode_reward)
             steps_history.append(episode_steps)
             # 如果成功的话，在success_history中记录下episode
@@ -256,7 +269,7 @@ class Train:
             logger.info(f"initial_angles: {np.round(initial_theta, 3)}")
             logger.info(f"final_angles:   {np.round(self.environment.theta, 3)}")
             logger.info(f"target_angles:  {np.round(self.environment.target, 3)}")
-            logger.info(f"angles_error:   {np.round(angles_error, 3)}  angles_error_l2: {angles_error_l2:.3f}")
+            logger.info(f"angles_error:   {error_str},   {error_str_L2}")
             
             if success:
                 logger.info(f"{GREEN}成功{RESET}")
