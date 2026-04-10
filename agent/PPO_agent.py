@@ -18,7 +18,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super().__init__()
-        self.action_bound = 0.2
+        self.action_bound = 0.5
 
         self.actor = nn.Sequential(
             nn.Linear(state_dim, 256),
@@ -91,7 +91,7 @@ class Memory:
 class PPOAgent:
     def __init__(self, state_dim, action_dim):
         self.policy = ActorCritic(state_dim, action_dim).to(device)
-        self.lr = 3e-4
+        self.lr = 1e-4
         self.origin_lr = self.lr
         self.optimizer = torch.optim.Adam(self.policy.parameters(), lr=self.lr)
 
@@ -137,21 +137,17 @@ class PPOAgent:
 
         advantages = torch.tensor(advantages, dtype=torch.float32).to(device)
         returns = torch.tensor(returns, dtype=torch.float32).to(device)
-        
-        # 归一化 advantages 和 returns
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
 
-        # 每次 update 前清空 history，计算当前 batch 的 loss
-        self.loss_history = []
-        
         for _ in range(self.K_epochs):
             logprobs, state_values, entropy = self.policy.evaluate(states, actions)
 
             ratios = torch.exp(logprobs - old_logprobs)
+            
+            # 使用GAE优势函数
+            advantages_normalized = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-            surr1 = ratios * advantages
-            surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
+            surr1 = ratios * advantages_normalized
+            surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages_normalized
 
             policy_loss = -torch.min(surr1, surr2).mean()
             value_loss = nn.MSELoss()(state_values, returns)
@@ -169,8 +165,5 @@ class PPOAgent:
             self.loss_history.append(loss.item())
 
         self.loss = np.mean(self.loss_history)
+        self.loss_history = []
 
-        
-
-
-    

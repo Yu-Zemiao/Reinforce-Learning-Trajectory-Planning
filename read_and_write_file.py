@@ -25,8 +25,8 @@ class ReadAndWritefile:
         # 训练参数文件
         self.read_training_parameters_file_path = None
         self.write_training_parameters_file_path = None
-
-        self.write_reward_file_path = None
+        # 数据文件
+        self.write_data_file_path = None
 
 
 
@@ -102,12 +102,12 @@ class ReadAndWritefile:
             # 如果文件被占用或无权限，这里会给出明确的中文提示，而不是抛出一长串底层的 Traceback
             raise RuntimeError(f"保存失败！请检查文件是否被占用或是否有写入权限。\n目标路径: {path}\n底层报错: {e}")
 
-    def write_reward_file(self, reward_container = None, write_reward_file_path = None):
+    def write_data_file(self, data_container = None, write_data_file_path = None):
         
-        path = write_reward_file_path if write_reward_file_path is not None else self.write_reward_file_path
+        path = write_data_file_path if write_data_file_path is not None else self.write_data_file_path
         self.file_path_exist_detect(path) # 检查路径是否存在
-        self.container_exist_detect(reward_container)
-        np.savetxt(path, reward_container, fmt='%.3f')  # type: ignore
+        self.container_exist_detect(data_container)
+        np.savetxt(path, data_container, fmt='%.3f')  # type: ignore
 
-        logger.info(f"输出奖励成功！共输出{len(reward_container)}个数据") # type: ignore
-              
+        # logger.info(f"输出奖励成功！共输出{len(data_container)}个数据")
+

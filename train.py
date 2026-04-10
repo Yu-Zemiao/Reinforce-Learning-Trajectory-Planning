@@ -1,10 +1,13 @@
 #引入模块----------------------------------
+from math import log
 import torch
 import torch.nn as nn
 from torch.distributions import Normal
 import numpy as np
 import copy
 import os
+
+from torch.nn.modules import loss
 #------------------------------------------
 
 #自定义模块--------------------------------
@@ -33,16 +36,22 @@ fileio = ReadAndWritefile()
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-reward_path = os.path.join(current_dir, "log", "data", "reward")
-reward_path = os.path.join(reward_path, "reward.txt")
+data_path = os.path.join(current_dir, "log", "data")
+# 奖励文件路径
+reward_path = os.path.join(data_path, "reward.txt")
 os.makedirs(os.path.dirname(reward_path), exist_ok=True)
-write_reward_file_path = reward_path # type: ignore
-
+write_reward_file_path = reward_path
+# 误差文件路径
+error_path = os.path.join(data_path, "error.txt")
+os.makedirs(os.path.dirname(error_path), exist_ok=True)
+write_error_file_path = error_path
+# 训练文件路径
 training_path = os.path.join(current_dir, "log", "train")
 best_training_parameters_path = os.path.join(training_path, "best_training_parameters.pt")
 os.makedirs(os.path.dirname(best_training_parameters_path), exist_ok=True)
 last_training_parameters_path = os.path.join(training_path, "last_training_parameters.pt")
 os.makedirs(os.path.dirname(last_training_parameters_path), exist_ok=True)
+
 
 
 
@@ -134,6 +143,7 @@ class Train:
 
     def train(self):
         rewards_history = []
+        error_history = []
         steps_history = []
         success_history = []
 
@@ -146,7 +156,7 @@ class Train:
             logger.info(f"Episode {episode + 1}--------------------------------------------------------------------------------")
             # state = torch.FloatTensor(self.environment.train_reset()).to(device)
 
-            state, max_distance = self.environment.small_angle_train_reset()
+            state, max_distance = self.environment.train_reset()
             state = torch.FloatTensor(state).to(device)
 
             initial_theta = self.environment.theta
@@ -161,11 +171,7 @@ class Train:
 
                 action, log_prob = self.agent.policy.act(state)
 
-                # next_state, reward, done, success = self.environment.step(
-                #     action.detach().cpu().numpy(),
-                # )
-
-                next_state, reward, done, success = self.environment.small_step(
+                next_state, reward, done, success = self.environment.step(
                     action.detach().cpu().numpy(),
                     max_distance
                 )
@@ -201,7 +207,7 @@ class Train:
                 wether_update_lr_count = 0
             else:
                 wether_update_lr_count += 1
-                if wether_update_lr_count >= 100 and self.agent.lr > self.the_smallest_lr_threshold:
+                if wether_update_lr_count >= 500 and self.agent.lr > self.the_smallest_lr_threshold:
                     self.agent.lr *= 0.8
                     logger.info(f"lr减小，当前lr: {self.agent.lr:.6f}")
                     wether_update_lr_count = 0
@@ -254,6 +260,7 @@ class Train:
             
 
             rewards_history.append(episode_reward)
+            error_history.append(angles_error_l2)
             steps_history.append(episode_steps)
             # 如果成功的话，在success_history中记录下episode
             if success:
@@ -262,7 +269,8 @@ class Train:
             # 输出奖励数据
             # 实际想记录的是每个episode的最终奖励
             if (episode + 1) % 10 == 0:
-                fileio.write_reward_file(reward_container = rewards_history, write_reward_file_path = write_reward_file_path)
+                fileio.write_data_file(data_container = rewards_history, write_data_file_path = write_reward_file_path)
+                fileio.write_data_file(data_container = error_history, write_data_file_path = write_error_file_path)
 
             # 打印输出------------------------------------------------------------------------------------------
             logger.info(f"last_best_loss: {last_best_loss:.3f}   now_loss: {now_loss:.3f}   final_reward: {episode_reward:.3f}   lr: {self.agent.lr:.6f}   step: {episode_steps}")
@@ -279,4 +287,4 @@ class Train:
             logger.info(f"-----------------------------------------------------------------------------------------")
             logger.info(f" ")
 
-    
+
