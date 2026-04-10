@@ -3,11 +3,17 @@ import numpy as np
 import os
 #------------------------------------------
 
+#配置（必须在其他自定义模块之前导入并解析）--
+from config import parse_args, device
+args, device = parse_args()
+#------------------------------------------
+
 #自定义模块--------------------------------
 from visiualization import Visiualization
 from environment import Environment
 from train import Train
 from read_and_write_file import ReadAndWritefile
+from utils.logger import logger
 #------------------------------------------
 
 #注意事项----------------------------------
@@ -40,6 +46,8 @@ from read_and_write_file import ReadAndWritefile
 # 主体-------------------------------------
 
 if __name__ == "__main__":
+
+    logger.info(f"使用设备: {device}")
 
     env = Environment()
     

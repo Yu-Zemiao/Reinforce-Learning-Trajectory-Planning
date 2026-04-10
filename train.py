@@ -18,6 +18,7 @@ from agent.PPO_agent import PPOAgent
 from agent.SAC_agent import SACAgent
 from read_and_write_file import ReadAndWritefile
 from utils.logger import logger
+from config import device
 #------------------------------------------
 
 #注意事项--------------------------------
@@ -29,8 +30,6 @@ from utils.logger import logger
 GREEN = "\033[92m"
 RED = "\033[91m"
 RESET = "\033[0m"
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 fileio = ReadAndWritefile()
 

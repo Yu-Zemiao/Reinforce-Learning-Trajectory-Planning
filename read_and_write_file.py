@@ -6,6 +6,7 @@ import torch
 #自定义模块--------------------------------
 from agent.PPO_agent import PPOAgent
 from utils.logger import logger
+from config import device
 #------------------------------------------
 
 #注意事项----------------------------------

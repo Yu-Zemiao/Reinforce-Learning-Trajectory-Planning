@@ -9,6 +9,7 @@ from train import Train
 
 from utils.TraceVisiualization import trace_trajectory_to_gif
 from utils.logger import logger
+from config import device
 
 
 def generate_trajectory_from_model(max_steps=4000):

@@ -6,14 +6,12 @@ from torch.distributions import Normal
 import numpy as np
 #------------------------------------------
 #自定义模块--------------------------------
-
+from config import device
 #------------------------------------------
 #注意事项--------------------------------
 # 1.这个算法实际是PPO-clip，即PPO的一种改版
 #------------------------------------------
 # 主体-------------------------------------
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim):

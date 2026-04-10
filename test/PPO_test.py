@@ -10,9 +10,6 @@ import numpy as np
 
 # 主体-------------------------------------
 
-# 设置设备
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super().__init__()
