@@ -174,7 +174,7 @@ class Environment:
         
         # 1. 距离改善奖励（连续值，提供更稳定的梯度）
         distance_improvement = self._prev_dist_norm - norm_angles_error
-        reward += 10.0 * distance_improvement  # 放大奖励信号
+        reward += 20.0 * distance_improvement  # 放大奖励信号
         
         # 2. 潜在奖励塑形（基于距离的奖励）
         reward += -1.0 * norm_angles_error  # 距离越近奖励越高
