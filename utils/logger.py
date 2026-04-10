@@ -64,9 +64,9 @@ class _RootAsyncLoggerSingleton:
         self._log_dir.mkdir(parents=True, exist_ok=True)
         self._log_file = self._log_dir / "run.log"
         
-        # 每次启动时删除旧日志文件，重新写入
-        if self._log_file.exists():
-            self._log_file.unlink()
+        # # 每次启动时删除旧日志文件，重新写入
+        # if self._log_file.exists():
+        #     self._log_file.unlink()
 
         self._queue: queue.Queue = queue.Queue(maxsize=10000)
         self._queue_handler = QueueHandler(self._queue)
@@ -89,7 +89,7 @@ class _RootAsyncLoggerSingleton:
 
         self._file_handler = RotatingFileHandler(
             filename=self._log_file,
-            mode='w',
+            mode='a',
             maxBytes=5 * 1024 * 1024,  # 5MB
             backupCount=0,              # 不保留备份文件
             encoding="utf-8"
