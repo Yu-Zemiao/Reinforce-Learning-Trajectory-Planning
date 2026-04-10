@@ -137,17 +137,21 @@ class PPOAgent:
 
         advantages = torch.tensor(advantages, dtype=torch.float32).to(device)
         returns = torch.tensor(returns, dtype=torch.float32).to(device)
+        
+        # 归一化 advantages 和 returns
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
 
+        # 每次 update 前清空 history，计算当前 batch 的 loss
+        self.loss_history = []
+        
         for _ in range(self.K_epochs):
             logprobs, state_values, entropy = self.policy.evaluate(states, actions)
 
             ratios = torch.exp(logprobs - old_logprobs)
-            
-            # 使用GAE优势函数
-            advantages_normalized = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
-            surr1 = ratios * advantages_normalized
-            surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages_normalized
+            surr1 = ratios * advantages
+            surr2 = torch.clamp(ratios, 1 - self.eps_clip, 1 + self.eps_clip) * advantages
 
             policy_loss = -torch.min(surr1, surr2).mean()
             value_loss = nn.MSELoss()(state_values, returns)

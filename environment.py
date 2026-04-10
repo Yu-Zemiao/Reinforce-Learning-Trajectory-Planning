@@ -1,5 +1,6 @@
 #引入模块----------------------------------
 import numpy as np
+from torch import norm
 from utils.logger import logger
 #------------------------------------------
 #自定义模块--------------------------------
@@ -29,7 +30,7 @@ class Environment:
         self.action_dim = 6
 
         self.distance_error_threshold = 0.010 # 距离误差阈值
-        self.angles_error_threshold = 0.1
+        self.angles_error_threshold = 1
         self._lo = self.robot.theta_limits[:, 0].astype(float)
         self._hi = self.robot.theta_limits[:, 1].astype(float)
         self._range = self._hi - self._lo
@@ -143,7 +144,7 @@ class Environment:
     def step(self, action):
         action = np.asarray(action, dtype=float)
         self.theta = self.theta + action
-        self.theta = np.clip(self.theta, self._lo, self._hi)
+        # self.theta = np.clip(self.theta, self._lo, self._hi)
         reward = 0.0
 
         # ====================================================
@@ -215,7 +216,7 @@ class Environment:
     def small_step(self, action, max_distance):
         action = np.asarray(action, dtype=float)
         self.theta = self.theta + action
-        self.theta = np.clip(self.theta, self._lo, self._hi)
+        # self.theta = np.clip(self.theta, self._lo, self._hi)
         reward = 0.0
 
         # ====================================================
@@ -225,36 +226,32 @@ class Environment:
         # 关节角度限制，并加以惩罚
         # 如果超出范围，奖励减5并回退角度
         for i in range(6):
-            theta = self.theta[i]
-            if theta < self._lo[i]:
-                self.theta[i] = self._lo[i]
-                self.theta[i] -= action[i]
+            if self.theta[i] < self._lo[i] or self.theta[i] > self._hi[i]:
                 reward -= 5.0
-            elif theta > self._hi[i]:
-                self.theta[i] = self._hi[i]
                 self.theta[i] -= action[i]
-                reward -= 5.0 
 
         self.theta = self.theta.astype(float)
 
         self.step_count += 1
 
         # 改进奖励函数：使用连续的奖励塑形，而非二分类奖励
-        angles_error = self.target - self.theta
+        # angles_error = self.target - self.theta
+        angles_error = np.abs(self.target - self.theta)
 
-        norm_angles_error = np.linalg.norm(angles_error / max_distance) # 小角度
-        
+        # norm_angles_error = np.linalg.norm(angles_error / max_distance) # 小角度
+        norm_angles_error = np.linalg.norm(angles_error / self._range) # 大角度
+
         # 1. 距离改善奖励（连续值，提供更稳定的梯度）
         distance_improvement = self._prev_dist_norm - norm_angles_error
-        reward += 10.0 * distance_improvement  # 放大奖励信号
+        # reward += 1.0 * distance_improvement  # 放大奖励信号
         
         # 2. 潜在奖励塑形（基于距离的奖励）
-        reward += -1.0 * norm_angles_error  # 距离越近奖励越高
+        reward += -10.0 * norm_angles_error  # 距离越近奖励越高
         
-        # 3. 动作平滑性惩罚（避免剧烈抖动）
-        if hasattr(self, '_prev_action'):
-            action_smoothness = -0.1 * np.linalg.norm(action - self._prev_action)
-            reward += action_smoothness
+        # # 3. 动作平滑性惩罚（避免剧烈抖动）
+        # if hasattr(self, '_prev_action'):
+        #     action_smoothness = -0.1 * np.linalg.norm(action - self._prev_action)
+        #     reward += action_smoothness
         self._prev_action = action.copy()
         
         self._prev_dist_norm = norm_angles_error
@@ -280,7 +277,6 @@ class Environment:
                 self.curriculum_stage += 1
                 self.success_count = 0
                 logger.info(f"课程难度提升至: {self.curriculum_difficulty:.2f}")
-
 
         return self._get_state(angles_error), float(reward), done, success
 
