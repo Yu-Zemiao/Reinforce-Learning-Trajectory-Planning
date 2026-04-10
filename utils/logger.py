@@ -5,7 +5,7 @@ import sys
 import threading
 import ctypes
 from pathlib import Path
-from logging.handlers import QueueHandler, QueueListener
+from logging.handlers import QueueHandler, QueueListener, RotatingFileHandler
 
 
 class _ColorFormatter(logging.Formatter):
@@ -63,6 +63,10 @@ class _RootAsyncLoggerSingleton:
         self._log_dir = Path(__file__).resolve().parents[1] / "log"
         self._log_dir.mkdir(parents=True, exist_ok=True)
         self._log_file = self._log_dir / "run.log"
+        
+        # 每次启动时删除旧日志文件，重新写入
+        if self._log_file.exists():
+            self._log_file.unlink()
 
         self._queue: queue.Queue = queue.Queue(maxsize=10000)
         self._queue_handler = QueueHandler(self._queue)
@@ -83,7 +87,13 @@ class _RootAsyncLoggerSingleton:
         self._stream_handler.setLevel(logging.INFO)
         self._stream_handler.setFormatter(color_formatter)
 
-        self._file_handler = logging.FileHandler(filename=self._log_file, encoding="utf-8")
+        self._file_handler = RotatingFileHandler(
+            filename=self._log_file,
+            mode='w',
+            maxBytes=5 * 1024 * 1024,  # 5MB
+            backupCount=0,              # 不保留备份文件
+            encoding="utf-8"
+        )
         self._file_handler.setLevel(logging.DEBUG)
         self._file_handler.setFormatter(formatter)
 
