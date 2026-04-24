@@ -16,12 +16,10 @@ from config import device
 class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim):
         super().__init__()
-        self.action_bound = 0.5
+        self.action_bound = 0.2
 
         self.actor = nn.Sequential(
             nn.Linear(state_dim, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
@@ -44,33 +42,63 @@ class ActorCritic(nn.Module):
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
             nn.Linear(256, 1)
         )
 
     def act(self, state):
         state = state.to(device)
-        mean = torch.tanh(self.actor(state)) * self.action_bound
-        log_std = torch.clamp(self.log_std, -2.0, 1.0)
+
+        # 不对 mean 做 tanh（关键修改）
+        mean = self.actor(state)
+
+        # 更稳定的 std 处理
+        log_std = torch.clamp(self.log_std, -20, 2)
         std = torch.exp(log_std)
 
         dist = Normal(mean, std)
-        action = dist.sample()
-        action = torch.clamp(action, -self.action_bound, self.action_bound)
-        log_prob = dist.log_prob(action).sum(dim=-1)
 
-        return action, log_prob
+        # 使用 rsample（可重参数化，梯度更稳定）
+        raw_action = dist.rsample()
+
+        # tanh squash 到 [-1, 1]
+        action = torch.tanh(raw_action)
+
+        # 计算 log_prob（关键：用 raw_action + Jacobian 修正）
+        log_prob = dist.log_prob(raw_action) - torch.log(1 - action.pow(2) + 1e-6)
+        log_prob = log_prob.sum(dim=-1)
+
+        # 最后 scale 到环境范围
+        action = action * self.action_bound
+
+        return action.detach(), log_prob.detach()
 
     def evaluate(self, state, action):
-        mean = torch.tanh(self.actor(state)) * self.action_bound
-        log_std = torch.clamp(self.log_std, -2.0, 1.0)
+        # actor 输出
+        mean = self.actor(state)
+
+        log_std = torch.clamp(self.log_std, -20, 2)
         std = torch.exp(log_std)
 
         dist = Normal(mean, std)
 
-        log_prob = dist.log_prob(action).sum(dim=-1)
-        entropy = dist.entropy().sum(dim=-1) # 计算熵，将其作为一个奖励加入至Loss函数中，用于防止网络过早陷入局部最优
+        # ⚠️ 关键：把 action 还原回 raw_action
+        # 因为 action 是经过 tanh + scale 的
+        action_scaled = action / self.action_bound
+
+        # 防止数值溢出
+        action_scaled = torch.clamp(action_scaled, -0.999, 0.999)
+
+        # 反 tanh（atanh）
+        raw_action = 0.5 * torch.log((1 + action_scaled) / (1 - action_scaled))
+
+        # 正确 log_prob（含修正项）
+        log_prob = dist.log_prob(raw_action) - torch.log(1 - action_scaled.pow(2) + 1e-6)
+        log_prob = log_prob.sum(dim=-1)
+
+        # entropy（注意：这里仍是高斯 entropy，近似用即可）
+        entropy = dist.entropy().sum(dim=-1)
+
+        # critic
         value = self.critic(state)
 
         return log_prob, value.squeeze(), entropy
@@ -97,9 +125,9 @@ class PPOAgent:
 
         self.gamma = 0.99
         self.eps_clip = 0.2
-        self.K_epochs = 4
+        self.K_epochs = 4 # 一批数据重复训练K次
         self.value_coef = 0.5
-        self.entropy_coef = 0.02  # 增加熵系数，鼓励探索
+        self.entropy_coef = 0.01  # 增加熵系数，鼓励探索
         self.gae_lambda = 0.95  # 添加GAE参数
         self.max_grad_norm = 0.5
         self.loss = 0

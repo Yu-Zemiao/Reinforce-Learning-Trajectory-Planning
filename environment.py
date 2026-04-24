@@ -24,7 +24,7 @@ class Environment:
 
         self.angles = self.initial_angles.copy()
 
-        self.max_steps = 2000
+        self.max_steps = 4000
 
         self.state_dim = 18
         self.action_dim = 6
@@ -57,6 +57,8 @@ class Environment:
             self.theta = np.zeros(6, dtype=float)
             self.target = np.zeros(6, dtype=float)
             
+            theta_distance = np.zeros(6, dtype=float)
+
             # 课程学习：根据难度系数生成初始点和目标点
             for i in range(6):
                 theta_limit = self.robot.theta_limits[i]
@@ -79,6 +81,11 @@ class Environment:
                     theta_limit[0],
                     theta_limit[1]
                 )
+                # theta_distance记录每个关节的目标角度与初始角度的距离
+                theta_distance[i] = self.target[i] - self.theta[i]
+
+            # 求二范数
+            distance_l2 = np.linalg.norm(theta_distance)
 
         else:
             self.theta = self.initial_angles.copy().astype(float)
@@ -86,13 +93,13 @@ class Environment:
         theta_error = self.target - self.theta
 
         self.step_count = 0
-        self._prev_dist_norm = np.linalg.norm(theta_error / self._range)
+        self._prev_dist_norm = np.linalg.norm(theta_error / distance_l2)
         
         # 清除上一步的动作记录
         if hasattr(self, '_prev_action'):
             delattr(self, '_prev_action')
 
-        return self._get_state(theta_error), max_distance
+        return self._get_state(theta_error), distance_l2
 
     def _get_state(self, angles_error):
         norm_theta = 2.0 * (self.theta - self._lo) / self._range - 1.0
@@ -100,7 +107,7 @@ class Environment:
         norm_angles_error = angles_error / self._range
         return np.concatenate([norm_theta, norm_target, norm_angles_error]).astype(np.float32)
 
-    def step(self, action, max_distance):
+    def step(self, action, distance_l2):
         action = np.asarray(action, dtype=float)
         self.theta = self.theta + action
         # self.theta = np.clip(self.theta, self._lo, self._hi)
@@ -125,15 +132,15 @@ class Environment:
         # angles_error = self.target - self.theta
         angles_error = np.abs(self.target - self.theta)
 
-        # norm_angles_error = np.linalg.norm(angles_error / max_distance) # 小角度
-        norm_angles_error = np.linalg.norm(angles_error / self._range) # 大角度
+        norm_angles_error = np.linalg.norm(angles_error / distance_l2) # 小角度
+        # norm_angles_error = np.linalg.norm(angles_error / self._range) # 大角度
 
         # 1. 距离改善奖励（连续值，提供更稳定的梯度）
         distance_improvement = self._prev_dist_norm - norm_angles_error
-        reward += 50.0 * distance_improvement  # 放大奖励信号
-        
+        reward += 1 * distance_improvement # 放大奖励信号
+
         # 2. 潜在奖励塑形（基于距离的奖励）
-        reward += -10.0 * norm_angles_error  # 距离越近奖励越高
+        # reward += -1.0 * norm_angles_error # 距离越近奖励越高
         
         # # 3. 动作平滑性惩罚（避免剧烈抖动）
         # if hasattr(self, '_prev_action'):

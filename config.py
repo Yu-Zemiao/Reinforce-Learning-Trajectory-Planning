@@ -16,7 +16,7 @@ def get_device(device_str='auto'):
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description='强化学习轨迹规划')
-    parser.add_argument('--device', type=str, default='auto',
+    parser.add_argument('--device', type=str, default='1',
                         help='使用的设备: cpu, auto(默认), 或 GPU 编号 (如 0, 1)')
     args = parser.parse_args()
 
