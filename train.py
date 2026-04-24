@@ -44,6 +44,8 @@ write_reward_file_path = reward_path
 error_path = os.path.join(data_path, "error.txt")
 os.makedirs(os.path.dirname(error_path), exist_ok=True)
 write_error_file_path = error_path
+# 动作文件路径
+action_path = os.path.join(data_path,"action")
 # 训练文件路径
 training_path = os.path.join(current_dir, "log", "train")
 best_training_parameters_path = os.path.join(training_path, "best_training_parameters.pt")
@@ -145,6 +147,7 @@ class Train:
         error_history = []
         steps_history = []
         success_history = []
+        action_history = []
 
         last_best_loss = 1.0e+8
         now_loss = 0.0
@@ -155,7 +158,7 @@ class Train:
             logger.info(f"Episode {episode + 1}--------------------------------------------------------------------------------")
             # state = torch.FloatTensor(self.environment.train_reset()).to(device)
 
-            state, max_distance = self.environment.train_reset()
+            state, distance_l2 = self.environment.train_reset()
             state = torch.FloatTensor(state).to(device)
 
             initial_theta = self.environment.theta
@@ -170,9 +173,11 @@ class Train:
 
                 action, log_prob = self.agent.policy.act(state)
 
+                # action_history.append(action.detach().cpu().numpy())
+
                 next_state, reward, done, success = self.environment.step(
                     action.detach().cpu().numpy(),
-                    max_distance
+                    distance_l2
                 )
                 
                 # 训练用
@@ -191,6 +196,11 @@ class Train:
 
                 if done:
                     break
+            
+            # action_path1 = os.path.join(action_path,f"episode_{episode}.txt")   
+            # os.makedirs(os.path.dirname(action_path1), exist_ok=True)
+            # write_action_file_path = action_path1
+            # fileio.write_data_file(action_history, write_action_file_path)
 
             # 这里应该是每个episode最多训练一次
             if len(self.agent.memory.states) >= self.batch_size: # 这个值是不是应该调大一点，不让其每次都训练
