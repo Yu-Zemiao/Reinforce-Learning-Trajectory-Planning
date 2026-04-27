@@ -18,9 +18,6 @@ class Visiualization:
         self.robot = None
         self.sliders = []
 
-
-
-
     # ============================
     # 坐标轴等比例
     # ============================

@@ -10,7 +10,7 @@ args, device = parse_args()
 
 #自定义模块--------------------------------
 from visiualization import Visiualization
-from environment import Environment
+from environment.environment import Environment
 from train import Train
 from read_and_write_file import ReadAndWritefile
 from utils.logger import logger

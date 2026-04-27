@@ -12,7 +12,7 @@ from robot.robot import Robot
 #------------------------------------------
 # 主体-------------------------------------
 
-class Environment:
+class DetectEnvironment:
     def __init__(self):
 
         self.robot = Robot()
@@ -52,7 +52,7 @@ class Environment:
         return 0
 
     # 相较于原本的train_reset，对初始角度没有改变，对目标角度进行了最大角度限制
-    def train_reset(self, max_angle_threshold = 50):
+    def train_reset(self, max_angle_threshold = 20):
         if self.use_random_reset:
             self.theta = np.zeros(6, dtype=float)
             self.target = np.zeros(6, dtype=float)

@@ -13,7 +13,7 @@ from torch.nn.modules import loss
 #自定义模块--------------------------------
 from robot.robot import Robot
 from visiualization import Visiualization
-from environment import Environment
+from environment.environment import Environment
 from agent.PPO_agent import PPOAgent
 from agent.SAC_agent import SACAgent
 from read_and_write_file import ReadAndWritefile
@@ -52,10 +52,6 @@ best_training_parameters_path = os.path.join(training_path, "best_training_param
 os.makedirs(os.path.dirname(best_training_parameters_path), exist_ok=True)
 last_training_parameters_path = os.path.join(training_path, "last_training_parameters.pt")
 os.makedirs(os.path.dirname(last_training_parameters_path), exist_ok=True)
-
-
-
-
 class Train:
     
     def __init__(self, environment:Environment):
@@ -63,8 +59,10 @@ class Train:
             state_dim=environment.state_dim,
             action_dim=environment.action_dim,
         )
-
         self.robot = Robot()
+        self.ce = environment.ce # 碰撞环境
+        self.de = environment.de # 检测环境
+
         self.max_episodes = 10_0000
         self.batch_size = 100
         self.environment = environment
