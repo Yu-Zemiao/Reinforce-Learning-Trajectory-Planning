@@ -27,6 +27,12 @@ class ActorCritic(nn.Module):
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
             nn.Linear(256, action_dim)
         )
 
@@ -35,6 +41,12 @@ class ActorCritic(nn.Module):
 
         self.critic = nn.Sequential(
             nn.Linear(state_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
             nn.ReLU(),
             nn.Linear(256, 256),
             nn.ReLU(),

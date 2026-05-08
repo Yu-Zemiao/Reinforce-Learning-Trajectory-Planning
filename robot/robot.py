@@ -34,6 +34,11 @@ class Robot:
             [-360, 360]
         ])
 
+        self.arm_radius = np.array([10, 10, 10, 10, 10, 10])
+        self.arm_length = np.linalg.norm(self.parameters[:, 1:3], axis=1)
+
+        self.theta = self.parameters[:, 0]
+
         self.cr = CollisionRobot(self.parameters)
         self.dr = DHRobot(self.parameters)
 
@@ -42,15 +47,13 @@ class Robot:
         self.parameters = parameters
 
 
-    def forward_kinematics(self, theta):
+    def forward_kinematics(self, theta = None):
         
-        # for i in range(6): # 这一部分后续应该添加到惩罚函数中
-        #     if theta[i] < self.theta_limits[i][0] or theta[i] > self.theta_limits[i][1]:
-        #         print(f"第{i + 1}个关节角超出范围！")
+        if theta is None:
+            theta = self.theta
 
         dr_posture = self.dr.forward_kinematics(theta)
         cr_posture = self.cr.forward_kinematics(theta)
         
-
         return dr_posture, cr_posture
 

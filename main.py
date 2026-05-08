@@ -9,7 +9,7 @@ args, device = parse_args()
 #------------------------------------------
 
 #自定义模块--------------------------------
-from visiualization import Visiualization
+from visualization import Visualization
 from environment.environment import Environment
 from train import Train
 from read_and_write_file import ReadAndWritefile
@@ -70,11 +70,18 @@ if __name__ == "__main__":
     os.makedirs(os.path.dirname(last_training_parameters_path), exist_ok=True)
     
 
-    read_training_parameters_file_path = best_training_parameters_path
+    read_training_parameters_file_path = last_training_parameters_path
 
     # 这个决定是否重新训练，还是依据上一次的结果再次训练
     # fileio.read_training_parameters_file(train.agent, read_training_parameters_file_path)
 
+    # ----------------------------------------------------------
+    # 创建障碍物
+
+    # env.ce.create_cube([500, 0, 500], [200, 200, 200])
+
+    # ----------------------------------------------------------
+
     train.train()
 
-    
+

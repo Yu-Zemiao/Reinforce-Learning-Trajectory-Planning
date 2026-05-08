@@ -6,13 +6,12 @@ from torch.distributions import Normal
 import numpy as np
 import copy
 import os
-
 from torch.nn.modules import loss
 #------------------------------------------
 
 #自定义模块--------------------------------
 from robot.robot import Robot
-from visiualization import Visiualization
+from visualization import Visualization
 from environment.environment import Environment
 from agent.PPO_agent import PPOAgent
 from agent.SAC_agent import SACAgent
@@ -34,7 +33,6 @@ RESET = "\033[0m"
 fileio = ReadAndWritefile()
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-
 data_path = os.path.join(current_dir, "log", "data")
 # 奖励文件路径
 reward_path = os.path.join(data_path, "reward.txt")
@@ -60,21 +58,23 @@ class Train:
             action_dim=environment.action_dim,
         )
         self.robot = Robot()
-        self.ce = environment.ce # 碰撞环境
-        self.de = environment.de # 检测环境
+        self.visualization = Visualization(environment)
 
-        self.max_episodes = 10_0000
-        self.batch_size = 100
         self.environment = environment
 
-        self.training_parameter_saving_path = None
-        self.model_snapshots = []
-        self.final_reward_memory = []
+        # 最大训练次数
+        self.max_episodes = 10_0000
+        # 训练批次，大于此数时，进行一次更新训练
+        self.batch_size = 100
 
+        self.final_reward_memory = []
         self.loss_history = []
 
+        # 最小学习率阈值
         self.the_smallest_lr_threshold = 1.0e-6
         
+        # 随机训练和课程训练测试用
+        self.wether_test = 0 # 是否测试
         # 定义测试集：10个代表性场景
         self.test_cases = [
             # 场景1：近距离
@@ -98,10 +98,9 @@ class Train:
             # 场景10：混合场景
             (np.array([120, 60, -30, 90, -60, 120]), np.array([-60, 120, 60, -90, 120, -60])),
         ]
-        
         self.best_test_error = float('inf')  # 记录最优测试误差
         self.test_frequency = 20  # 每20个episode测试一次
-        self.wether_test = 0 # 是否测试
+
     
     def evaluate_on_test_set(self):
         """
@@ -140,6 +139,7 @@ class Train:
         return avg_angle_error
         
 
+    # 训练函数
     def train(self):
         rewards_history = []
         error_history = []
@@ -156,27 +156,31 @@ class Train:
             logger.info(f"Episode {episode + 1}--------------------------------------------------------------------------------")
             # state = torch.FloatTensor(self.environment.train_reset()).to(device)
 
-            state, distance_l2 = self.environment.train_reset()
+            state = self.environment.stationary_point_train_reset()
+            initial_state = state.copy()
             state = torch.FloatTensor(state).to(device)
 
             initial_theta = self.environment.theta
+            self.environment.step_count = 0
+            trajectory = []
+            trajectory.append(self.environment.theta.copy())
             episode_reward = 0.0
             episode_steps = 0
             success = False
 
             update_count = 0
 
-            
             for step in range(self.environment.max_steps):
 
                 action, log_prob = self.agent.policy.act(state)
 
                 # action_history.append(action.detach().cpu().numpy())
 
-                next_state, reward, done, success = self.environment.step(
+                next_state, reward, done, success = self.environment.stationary_point_step(
                     action.detach().cpu().numpy(),
-                    distance_l2
                 )
+
+                trajectory.append(self.environment.theta.copy())
                 
                 # 训练用
                 self.agent.memory.states.append(state)
@@ -199,6 +203,22 @@ class Train:
             # os.makedirs(os.path.dirname(action_path1), exist_ok=True)
             # write_action_file_path = action_path1
             # fileio.write_data_file(action_history, write_action_file_path)
+
+            # 计算距离误差
+            final_state = self.agent.memory.states[-1]
+            final_state = final_state.cpu().numpy()
+            initial_posture, _ = self.environment.robot.forward_kinematics(initial_theta)
+            initial_flange_posture = initial_posture[6, :]
+            final_flange_posture = final_state[:6]
+            target_flange_posture = final_state[6:12]
+            initial_point = initial_flange_posture[:3]
+            final_point = final_flange_posture[:3]
+            target_point = target_flange_posture[:3]
+            distance_error = target_point - final_point
+            initial_distance_l2 = np.linalg.norm(initial_point - target_point)
+            final_distance_l2 = np.linalg.norm(final_point - target_point)
+            global_arrow2 = "↑" if (final_distance_l2 > initial_distance_l2) else "↓"
+            distance_error_str_L2 = f"from {initial_distance_l2:.3f} to {final_distance_l2:.3f} {global_arrow2}"
 
             # 这里应该是每个episode最多训练一次
             if len(self.agent.memory.states) >= self.batch_size: # 这个值是不是应该调大一点，不让其每次都训练
@@ -269,9 +289,19 @@ class Train:
             rewards_history.append(episode_reward)
             error_history.append(angles_error_l2)
             steps_history.append(episode_steps)
-            # 如果成功的话，在success_history中记录下episode
+
+            # 如果成功的话，保存轨迹
             if success:
-                success_history.append(episode)
+                data_path = os.path.join(current_dir, "log", "image")
+                trajectory_path = os.path.join(data_path, "success_trajectory.gif")
+                self.visualization.save_trajectory(trajectory = trajectory, sample_step = 10, fps = 10, save_path = trajectory_path)
+            
+            # 每n次保留一次轨迹
+            if (episode + 1) % 100 == 0:
+                data_path = os.path.join(current_dir, "log", "image")
+                trajectory_path = os.path.join(data_path, "last_trajectory.gif")
+                trajectory = np.array(trajectory)
+                self.visualization.save_trajectory(trajectory = trajectory, sample_step = 10, fps = 10, save_path = trajectory_path)
 
             # 输出奖励数据
             # 实际想记录的是每个episode的最终奖励
@@ -285,6 +315,7 @@ class Train:
             logger.info(f"final_angles:   {np.round(self.environment.theta, 3)}")
             logger.info(f"target_angles:  {np.round(self.environment.target, 3)}")
             logger.info(f"angles_error:   {error_str},   {error_str_L2}")
+            logger.info(f"distance_error:  {np.round(distance_error, 3)},   {distance_error_str_L2}")
             
             if success:
                 logger.info(f"{GREEN}成功{RESET}")
